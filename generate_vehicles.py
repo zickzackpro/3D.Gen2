@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Procedural original enduro and utility helicopter assets for Blender 4.3+.
+"""Original procedural enduro, helicopter and touring airplane for Blender 4.3+.
 
 Run with Python (launches Blender), or:
-blender --background --factory-startup --python generate_vehicles.py -- --asset both --render
+blender --background --factory-startup --python generate_vehicles.py -- --asset all --render
 
 Units: metres. Source: X forward, Y left, Z up. GLB uses standard glTF Y up.
 Copyright (c) 2026 zickzackpro. SPDX-License-Identifier: MIT
@@ -402,7 +402,7 @@ def add_studio(builder, resolution, samples):
     camera.location = center + Vector((span*1.02, -span*1.4, span*.64))
     camera.rotation_euler = (center-camera.location).to_track_quat("-Z", "Y").to_euler()
     camera_data.type = "ORTHO"
-    camera_data.ortho_scale = span*1.32
+    camera_data.ortho_scale = span*(1.05 if builder.name == "airplane" else 1.32)
     camera_data.lens = 50
     scene.camera = camera
     for name, offset, energy, color, size in [
@@ -448,6 +448,10 @@ def sha256(path):
         return hashlib.file_digest(stream, "sha256").hexdigest()
 
 
+def asset_builders():
+    return {"enduro": build_enduro, "helicopter": build_helicopter, "airplane": build_airplane}
+
+
 def generate_asset(name, options):
     directory = options.output / name
     directory.mkdir(parents=True, exist_ok=True)
@@ -466,7 +470,7 @@ def generate_asset(name, options):
     builder = Builder(name, options.texture_size, options.seed)
     started = time.monotonic()
     print("BUILDING", name, flush=True)
-    metadata = build_enduro(builder) if name == "enduro" else build_helicopter(builder)
+    metadata = asset_builders()[name](builder)
     prepare_geometry(builder)
     bpy.context.view_layer.update()
     bounds = collection_bounds(builder.objects)
@@ -501,7 +505,7 @@ def generate_asset(name, options):
         "generator_sha256": GENERATOR_SHA256,
         "blender_version": bpy.app.version_string, "seed": options.seed,
         "license": "MIT", "provenance": "Original procedural geometry and generated micro-surface textures; no external model or image sources.",
-        "request": "Professionelles realistisches Enduro-Motorrad und Helikopter als Python-generierte Grundlage fuer spaetere AAA-Spiele.",
+        "request": "Enduro-Motorrad, Helikopter und Flugzeug als detaillierte Python-generierte Grundlage fuer spaetere AAA-Spiele.",
         "design_exclusions": "No logos, third-party meshes, paid generation or claim of engine certification.",
         "units": "metres", "source_axes": {"forward":"+X","left":"+Y","up":"+Z"},
         "glb_axes": {"forward":"+X","left":"-Z","up":"+Y"},
@@ -522,8 +526,10 @@ def generate_asset(name, options):
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="generate_vehicles.py", description="Blender: Enduro und Helikopter in Metern generieren, mit PBR, UVs und LODs.")
-    parser.add_argument("--asset", choices=("both","enduro","helicopter"), default="both")
+    builders = asset_builders()
+    parser = argparse.ArgumentParser(prog="generate_vehicles.py", description="Blender: Enduro, Helikopter und Flugzeug in Metern generieren, mit PBR, UVs und LODs.")
+    parser.add_argument("--asset", choices=("all", "both", *builders), default="all",
+                        help="all: alle drei Modelle (Standard); both: Enduro und Helikopter wie bisher")
     parser.add_argument("--output", type=Path, default=Path("generated"))
     parser.add_argument("--lods", type=int, choices=(1,2,3), default=3, help="Anzahl Detailstufen (LOD0 bis LOD2)")
     parser.add_argument("--texture-size", type=int, choices=(128,256,512,1024), default=256)
@@ -541,7 +547,12 @@ def main():
     if not 64 <= options.resolution <= 8192 or not 1 <= options.samples <= 1024:
         parser.error("--resolution muss 64..8192 und --samples muss 1..1024 sein.")
     options.output = options.output.resolve()
-    names = ("enduro","helicopter") if options.asset=="both" else (options.asset,)
+    if options.asset == "all":
+        names = tuple(builders)
+    elif options.asset == "both":
+        names = ("enduro", "helicopter")
+    else:
+        names = (options.asset,)
     for name in names:
         directory = options.output/name
         if directory.exists() and any(directory.iterdir()) and not options.force:
@@ -1195,6 +1206,369 @@ def build_helicopter(b):
                   'Panel lines are geometry and simplified automatically in lower detail levels.']
     }
 
+
+def build_airplane(b):
+    """Original low-wing touring airplane, SI metres, +X forward and +Z up.
+
+    Closed airfoil sections leave real gaps at the separately hinged controls.
+    Glazing is opaque smoked material; the model has no finished interior.
+    """
+    ivory = b.mat('plane_ivory_paint', (.80, .83, .80), metallic=.16, roughness=.29)
+    orange = b.mat('plane_signal_orange', (.96, .135, .018), metallic=.16, roughness=.30)
+    graphite = b.mat('plane_graphite_paint', (.025, .040, .052), metallic=.28, roughness=.32)
+    glass = b.mat('plane_smoked_glass', (.019, .055, .074), metallic=.47, roughness=.115)
+    rubber = b.mat('plane_tire_rubber', (.013, .017, .019), roughness=.83)
+    seal = b.mat('plane_black_seal', (.010, .014, .016), roughness=.60)
+    alloy = b.mat('plane_satin_alloy', (.48, .53, .55), metallic=.92, roughness=.27)
+    steel = b.mat('plane_dark_steel', (.09, .12, .14), metallic=.86, roughness=.32)
+    chrome = b.mat('plane_polished_steel', (.65, .70, .72), metallic=1., roughness=.16)
+    composite = b.mat('plane_propeller_composite', (.035, .042, .046), metallic=.10, roughness=.42)
+    red = b.mat('plane_port_red', (.7, .01, .005), roughness=.2, emission=(1., .01, .004))
+    green = b.mat('plane_starboard_green', (.005, .42, .09), roughness=.2, emission=(.01, .8, .12))
+    lamp = b.mat('plane_lamp', (.80, .90, 1.), roughness=.16, emission=(.65, .82, 1.))
+
+    # x, half-width, vertical centre, half-height. The crown rises into the
+    # cabin and falls gradually into the tail cone and separate engine cowling.
+    stations = [
+        (-3.85, .045, 1.55, .07), (-3.65, .11, 1.52, .15),
+        (-3.20, .18, 1.48, .23), (-2.60, .27, 1.43, .31),
+        (-2.00, .39, 1.39, .39), (-1.50, .47, 1.40, .45),
+        (-1.15, .54, 1.42, .52), (-.80, .60, 1.46, .61),
+        (-.35, .65, 1.51, .72), (.10, .66, 1.54, .76),
+        (.50, .65, 1.55, .75), (.85, .62, 1.52, .71),
+        (1.10, .58, 1.48, .64), (1.35, .54, 1.42, .53),
+        (1.60, .50, 1.36, .44), (2.00, .46, 1.33, .38),
+        (2.40, .41, 1.33, .35), (2.75, .36, 1.34, .31),
+        (3.05, .29, 1.34, .26), (3.28, .22, 1.34, .20),
+    ]
+    ring_size = 80
+    vertices, faces = [], []
+    for x, width, center, height in stations:
+        for j in range(ring_size):
+            a = math.tau * j / ring_size
+            vertices.append((x, width*math.cos(a), center+height*math.sin(a)))
+    for i in range(len(stations)-1):
+        for j in range(ring_size):
+            faces.append((i*ring_size+j, i*ring_size+(j+1)%ring_size,
+                          (i+1)*ring_size+(j+1)%ring_size, (i+1)*ring_size+j))
+    faces += [tuple(reversed(range(ring_size))),
+              tuple((len(stations)-1)*ring_size+j for j in range(ring_size))]
+    shell = b.mesh('fuselage_shell', vertices, faces, ivory, smooth=True)
+    for material in (graphite, orange, glass):
+        shell.data.materials.append(material)
+    for i in range(len(stations)-1):
+        x = .5*(stations[i][0]+stations[i+1][0])
+        for j in range(ring_size):
+            a = math.tau*(j+.5)/ring_size
+            sine = math.sin(a)
+            poly = shell.data.polygons[i*ring_size+j]
+            if sine < -.39:
+                poly.material_index = 1
+            elif -.39 <= sine < -.16:
+                poly.material_index = 2
+            elif -.80 < x < .85 and .035 < sine < .94:
+                poly.material_index = 3
+            elif .85 < x < 1.60 and .035 < sine < .996:
+                poly.material_index = 3
+            elif -1.15 < x < -.80 and .12 < sine < .80:
+                poly.material_index = 3
+            elif 1.60 < x < 2.90 and sine > .95:
+                # Anti-glare paint follows the cowling rather than floating above it.
+                poly.material_index = 1
+
+    def surface(x, angle, offset=.012):
+        low, high = stations[0], stations[-1]
+        for left, right in zip(stations[:-1], stations[1:]):
+            if left[0] <= x <= right[0]:
+                low, high = left, right
+                break
+        t = max(0., min(1., (x-low[0])/(high[0]-low[0])))
+        width = low[1]*(1-t)+high[1]*t
+        center = low[2]*(1-t)+high[2]*t
+        height = low[3]*(1-t)+high[3]*t
+        return (x, (width+offset)*math.cos(angle), center+(height+offset)*math.sin(angle))
+
+    # Glazing seals lie directly on the loft, without an overlapping glass shell.
+    for side, side_name in ((1, 'left'), (-1, 'right')):
+        def theta(angle):
+            return angle if side == 1 else math.pi-angle
+        for xa, xb in ((-.80, -.35), (-.35, .85)):
+            points = [surface(xa, theta(a)) for a in (.04,.30,.60,.90,1.20)]
+            points += [surface(x, theta(1.20)) for x in (xa+(xb-xa)/3, xa+2*(xb-xa)/3, xb)]
+            points += [surface(xb, theta(a)) for a in (.90,.60,.30,.04)]
+            points += [surface(x, theta(.04)) for x in (xb-(xb-xa)/3, xa+(xb-xa)/3, xa)]
+            b.tube(side_name+'_window_seal', points, .012, seal)
+        b.tube(side_name+'_cabin_pillar', [surface(-.35,theta(a),.018) for a in (.02,.25,.5,.75,1.0,1.23)], .025, ivory)
+        wind_x = (.85,1.10,1.35,1.60)
+        b.tube(side_name+'_windscreen_lower_seal', [surface(x,theta(.04)) for x in wind_x], .014, seal)
+        b.tube(side_name+'_windscreen_rear_frame', [surface(.85,theta(a)) for a in (.02,.3,.6,.9,1.2,1.55)], .021, ivory)
+        b.tube(side_name+'_windscreen_front_seal', [surface(1.60,theta(a)) for a in (.02,.3,.6,.9,1.2,1.55)], .012, seal)
+        b.tube(side_name+'_windscreen_center_frame', [surface(x,theta(1.54),.015) for x in wind_x], .016, ivory)
+        door = [surface(-.38,theta(a),.006) for a in (-.34,-.12,.2,.5,.8,1.22)]
+        door += [surface(x,theta(1.22),.006) for x in (.05,.48,.84)]
+        door += [surface(.84,theta(a),.006) for a in (.9,.6,.3,0.,-.34)]
+        door += [surface(x,theta(-.34),.006) for x in (.45,.05,-.38)]
+        b.tube(side_name+'_door_shut_line', door, .0045, seal)
+        handle = surface(-.16,theta(-.04),.032)
+        b.box(side_name+'_door_handle_recess', handle, (.18,.022,.057), graphite, bevel=.016)
+        b.box(side_name+'_door_handle', (handle[0],handle[1]+side*.016,handle[2]), (.12,.024,.018), alloy, bevel=.006)
+        for x in (.47,.72):
+            p = surface(x,theta(.92),.024)
+            b.box(side_name+'_door_hinge', p, (.07,.033,.045), alloy, bevel=.008)
+        b.tube(side_name+'_cabin_step', [(-.55,side*.55,.88),(-.55,side*.85,.60),(-.92,side*.85,.60)], .018, steel)
+        # Cowling seam and captive fasteners suggest removable engine panels.
+        b.tube(side_name+'_cowling_split', [surface(x,theta(.03),.007) for x in (1.67,2.,2.4,2.75,3.08)], .004, seal)
+        b.tube(side_name+'_firewall_joint', [surface(1.68,theta(a),.005) for a in (-1.4,-1.0,-.5,0.,.5,1.,1.5)], .0045, steel)
+        for x in (1.76,2.02,2.30,2.60,2.88):
+            p = surface(x,theta(.12),.014)
+            b.sphere(side_name+'_cowling_fastener', p, (.011,.008,.011), alloy, segments=10,rings=5)
+        # Short rearward exhaust stubs sit below the engine cowling.
+        b.tube(side_name+'_exhaust_pipe', [(2.05,side*.32,1.06),(1.95,side*.46,.94),(1.61,side*.50,.91)], .037, steel)
+        b.cylinder(side_name+'_exhaust_dark_opening', (1.608,side*.50,.91),(1.595,side*.50,.909), .030, seal,vertices=24)
+        for z in (1.32,1.39,1.46):
+            b.box(side_name+'_cooling_louvre', (2.10,side*.452,z), (.30,.014,.018), graphite,bevel=.006,rotation=(0,-.12,0))
+
+    # Chin cooling inlet: nested lip and dark throat, separated from the spinner.
+    b.sphere('chin_air_intake_lip',(3.12,0,1.14),(.13,.19,.095),ivory,segments=32,rings=16)
+    b.sphere('chin_air_intake_throat',(3.226,0,1.14),(.020,.143,.058),seal,segments=32,rings=16)
+
+    def thickness(u, ratio):
+        return max(0.,5*ratio*(.2969*math.sqrt(max(0.,u))-.1260*u-.3516*u*u+.2843*u**3-.1036*u**4))
+
+    def airfoil(name, sections, start, end, material, parent=None, vertical=False, camber=.016, thickness_ratio=.12):
+        # sections: span coordinate, leading-edge x, chord, section centre.
+        # For horizontal surfaces centre is Z; for a fin it is centre Y.
+        samples=36
+        upper=[start+(end-start)*(.5-.5*math.cos(math.pi*i/samples)) for i in range(samples+1)]
+        profile=[(u,1) for u in upper]
+        # Omit duplicated zero-thickness leading/trailing vertices.
+        lower=list(reversed(upper))
+        if end == 1.: lower=lower[1:]
+        if start == 0.: lower=lower[:-1]
+        profile += [(u,-1) for u in lower]
+        vv=[]
+        for span,leading,chord,center in sections:
+            for u,side in profile:
+                offset=chord*(4*camber*u*(1-u)+side*thickness(u,thickness_ratio))
+                vv.append((leading-u*chord,center+offset,span) if vertical else (leading-u*chord,span,center+offset))
+        n=len(profile); ff=[]
+        for i in range(len(sections)-1):
+            ff.extend((i*n+j,i*n+(j+1)%n,(i+1)*n+(j+1)%n,(i+1)*n+j) for j in range(n))
+        ff += [tuple(reversed(range(n))),tuple((len(sections)-1)*n+j for j in range(n))]
+        obj=b.mesh(name,vv,ff,material,smooth=True)
+        obj.data.materials.append(graphite)
+        obj.data.materials.append(orange)
+        for i in range(len(sections)-1):
+            span=.5*(sections[i][0]+sections[i+1][0])
+            for j,(_u,sign) in enumerate(profile):
+                polygon=obj.data.polygons[i*n+j]
+                if vertical:
+                    if span>2.72: polygon.material_index=2
+                elif abs(span)>4.72:
+                    polygon.material_index=2
+                elif sign<0 and material != orange:
+                    polygon.material_index=1
+        if parent is not None: b.parent(obj,parent)
+        return obj
+
+    def wing_section(y):
+        fraction=(abs(y)-.52)/(5.40-.52)
+        return (y,.77-.38*fraction,1.84-.76*fraction,.99+math.tan(math.radians(4.))*max(0.,abs(y)-.52))
+
+    def hinge_pivot(name, a, z_axis=False):
+        # a holds two WORLD points on the actual hinge line.
+        first,last=Vector(a[0]),Vector(a[1])
+        pivot=b.empty(name,tuple((first+last)*.5))
+        local_axis=Vector((0,0,1) if z_axis else (0,1,0))
+        pivot.rotation_mode='QUATERNION'
+        pivot.rotation_quaternion=local_axis.rotation_difference((last-first).normalized())
+        return pivot
+
+    for side,side_name in ((1,'left'),(-1,'right')):
+        station_y=[.52,.78,1.15,1.65,2.15,2.63,2.74,3.2,3.7,4.2,4.72,5.10,5.25,5.40]
+        sections=[wing_section(side*y) for y in station_y]
+        airfoil(side_name+'_wing_forward',sections,0.,.715,ivory)
+        for ya,yb,label in ((.52,.80,'root'),(2.63,2.72,'control_separator'),(5.12,5.40,'tip')):
+            airfoil(side_name+'_wing_fixed_trailing_'+label,[wing_section(side*y) for y in (ya,(ya+yb)*.5,yb)],.715,1.,ivory)
+        for label,ya,yb in (('flap',.82,2.61),('aileron',2.74,5.10)):
+            control_sections=[wing_section(side*(ya+(yb-ya)*i/6)) for i in range(7)]
+            hinge=[]
+            for y in (ya,yb):
+                yy,leading,chord,center=wing_section(side*y)
+                hinge.append((leading-.725*chord,yy,center))
+            pivot=hinge_pivot(side_name+'_'+label+'_pivot',hinge)
+            control=airfoil(side_name+'_'+label,control_sections,.735,1.,ivory,parent=pivot)
+            for t in (.16,.50,.84):
+                point=Vector(hinge[0]).lerp(Vector(hinge[1]),t)
+                axis=(Vector(hinge[1])-Vector(hinge[0])).normalized()
+                part=b.cylinder(side_name+'_'+label+'_hinge_pin',tuple(point-axis*.035),tuple(point+axis*.035),.014,alloy,vertices=12)
+                b.parent(part,pivot)
+            # Recessed access covers and wing fasteners stay on the fixed surface.
+        for y in (1.35,2.20,3.15,4.10):
+            yy,leading,chord,center=wing_section(side*y)
+            u=.42; top=center+chord*(4*.016*u*(1-u)+thickness(u,.12))
+            b.cylinder(side_name+'_wing_inspection_cover',(leading-u*chord,yy,top+.001),(leading-u*chord,yy,top+.006),.075,ivory,vertices=32)
+            for i in range(4):
+                angle=math.tau*i/4
+                p=(leading-u*chord+.056*math.cos(angle),yy+.056*math.sin(angle),top+.009)
+                b.sphere(side_name+'_inspection_screw',p,(.006,.006,.003),steel,segments=8,rings=4)
+        # Walkway next to the cabin, and flush filler caps further outboard.
+        yy,leading,chord,center=wing_section(side*.91)
+        u=.55; z=center+chord*(4*.016*u*(1-u)+thickness(u,.12))
+        b.box(side_name+'_wing_walk',(-.12,side*.85,z+.008),(.68,.24,.012),graphite,bevel=.018,rotation=(side*math.radians(4),0,0))
+        yy,leading,chord,center=wing_section(side*1.58)
+        u=.33; z=center+chord*(4*.016*u*(1-u)+thickness(u,.12))
+        b.cylinder(side_name+'_fuel_cap',(leading-u*chord,yy,z),(leading-u*chord,yy,z+.009),.055,alloy,vertices=32)
+        b.box(side_name+'_fuel_cap_handle',(leading-u*chord,yy,z+.015),(.055,.012,.008),steel,bevel=.003)
+        yy,leading,chord,center=wing_section(side*5.37)
+        b.sphere(side_name+'_wingtip_light_base',(leading-.30*chord,side*5.38,center+.045),(.20,.05,.057),graphite,segments=24,rings=12)
+        b.sphere(side_name+'_navigation_light',(leading-.23*chord,side*5.419,center+.05),(.11,.035,.042),red if side==1 else green,segments=20,rings=10)
+        b.sphere(side_name+'_wingtip_strobe',(leading-.41*chord,side*5.416,center+.045),(.042,.024,.030),lamp,segments=16,rings=8)
+        # Fine rows of flush skin fasteners, placed from the same airfoil function.
+        for y in (.85,1.30,1.80,2.30,2.85,3.40,3.95,4.50,4.95):
+            yy,leading,chord,center=wing_section(side*y)
+            for u in (.10,.67):
+                top=center+chord*(4*.016*u*(1-u)+thickness(u,.12))
+                b.sphere(side_name+'_wing_skin_rivet',(leading-u*chord,yy,top+.002),(.0045,.0045,.002),alloy,segments=8,rings=4)
+
+    # Tailplane uses a straight Y hinge at X=-3.25, with tapered leading edge.
+    elevator=b.empty('elevator_pivot',(-3.25,0,1.63))
+    for side,side_name in ((1,'left'),(-1,'right')):
+        tail_sections=[]
+        for y in (.12,.40,.75,1.10,1.45,1.72,1.82):
+            chord=1.0-.36*(y-.12)/(1.82-.12)
+            tail_sections.append((side*y,-3.25+.725*chord,chord,1.63))
+        airfoil(side_name+'_horizontal_stabilizer',tail_sections,0.,.715,ivory,camber=0.,thickness_ratio=.095)
+        airfoil(side_name+'_elevator',tail_sections,.735,1.,orange,parent=elevator,camber=0.,thickness_ratio=.095)
+        for y in (.40,1.15,1.65):
+            b.parent(b.cylinder(side_name+'_elevator_hinge',(-3.25,side*y-.035,1.63),(-3.25,side*y+.035,1.63),.012,alloy,vertices=12),elevator)
+    fin_sections=[]
+    for z,chord in ((1.57,1.40),(1.80,1.27),(2.10,1.06),(2.42,.84),(2.74,.68),(2.96,.58),(3.02,.49)):
+        fin_sections.append((z,-3.52+.725*chord,chord,0.))
+    airfoil('vertical_stabilizer',fin_sections,0.,.715,ivory,vertical=True,camber=0.,thickness_ratio=.11)
+    rudder=b.empty('rudder_pivot',(-3.52,0,2.27))
+    airfoil('rudder',fin_sections,.735,1.,ivory,parent=rudder,vertical=True,camber=0.,thickness_ratio=.11)
+    for z in (1.86,2.35,2.78):
+        b.parent(b.cylinder('rudder_hinge',(-3.52,0,z-.035),(-3.52,0,z+.035),.012,alloy,vertices=12),rudder)
+    b.sphere('tail_white_light',(-3.86,0,1.58),(.065,.043,.043),lamp,segments=16,rings=8)
+    b.sphere('fin_anti_collision_beacon',(-3.28,0,3.031),(.060,.039,.031),red,segments=16,rings=8)
+
+    # Fixed tricycle gear with exposed tyres, separate wheel pivots and fairings.
+    wheel_specs=[('nose',(2.10,0,.205),.150,.055,.095),
+                 ('left',(-.52,1.22,.270),.195,.075,.125),
+                 ('right',(-.52,-1.22,.270),.195,.075,.125)]
+    for wheel_name,center,major,minor,rim in wheel_specs:
+        x,y,z=center
+        pivot=b.empty(wheel_name+'_wheel_pivot',center)
+        def wheel_part(obj):
+            b.parent(obj,pivot)
+            return obj
+        wheel_part(b.torus(wheel_name+'_tire',center,major,minor,rubber,axis='Y',major_segments=80,minor_segments=20))
+        for sy in (-1,1):
+            wheel_part(b.torus(wheel_name+'_rim_lip',(x,y+sy*minor*.78,z),rim,.011,alloy,axis='Y',major_segments=48,minor_segments=10))
+            wheel_part(b.torus(wheel_name+'_sidewall_rib',(x,y+sy*minor*.80,z),major-.010,.0025,rubber,axis='Y',major_segments=64,minor_segments=6))
+            wheel_part(b.cylinder(wheel_name+'_hub',(x,y+sy*minor*.53,z),(x,y+sy*minor*.90,z),rim*.86,alloy,vertices=40))
+            wheel_part(b.cylinder(wheel_name+'_axle_cap',(x,y+sy*minor*.91,z),(x,y+sy*minor*1.04,z),rim*.27,chrome,vertices=16))
+            for i in range(6):
+                a=math.tau*i/6
+                xx=x+rim*.61*math.sin(a); zz=z+rim*.61*math.cos(a)
+                wheel_part(b.cylinder(wheel_name+'_hub_bolt',(xx,y+sy*minor*.91,zz),(xx,y+sy*minor*.98,zz),.007,steel,vertices=6))
+        # Shallow moulding ribs run circumferentially on the tread.
+        for lateral in (-.018,0.,.018):
+            radius=major+math.sqrt(max(0.,minor*minor-lateral*lateral))
+            wheel_part(b.torus(wheel_name+'_tread_rib',(x,y+lateral,z),radius-.001,.0015,rubber,axis='Y',major_segments=80,minor_segments=6))
+        if wheel_name=='nose':
+            b.cylinder('nose_gear_strut',(2.17,0,1.05),(2.12,0,.53),.044,ivory,vertices=24)
+            b.cylinder('nose_gear_oleo',(2.12,0,.63),(2.10,0,.33),.025,chrome,vertices=24)
+            for sy in (-1,1):
+                b.tube('nose_gear_fork',[(2.12,sy*.02,.42),(2.08,sy*.075,.33),(2.10,sy*.075,.205)],.018,alloy)
+            b.sphere('nose_gear_upper_fairing',(2.10,0,.397),(.29,.092,.105),ivory,segments=32,rings=16)
+        else:
+            side=1 if y>0 else -1
+            b.tube(wheel_name+'_main_gear_leg',[(-.20,side*.66,.99),(-.35,side*.98,.65),(-.52,side*1.15,.30)],.040,ivory)
+            b.cylinder(wheel_name+'_wheel_axle',(-.52,side*1.12,.27),(-.52,side*1.32,.27),.022,steel,vertices=24)
+            wheel_part(b.cylinder(wheel_name+'_brake_disc',(-.52,side*1.135,.27),(-.52,side*1.148,.27),.105,steel,vertices=40))
+            b.box(wheel_name+'_brake_caliper',(-.45,side*1.135,.28),(.06,.04,.10),steel,bevel=.012)
+            b.tube(wheel_name+'_brake_line',[(-.20,side*.68,.98),(-.36,side*.99,.65),(-.46,side*1.12,.31)],.006,seal)
+            b.sphere(wheel_name+'_gear_upper_fairing',(-.55,side*1.22,.50),(.36,.13,.12),ivory,segments=32,rings=16)
+
+    # Constant-speed three-blade propeller. Closed twisted airfoil sections
+    # rotate in YZ around the X-axis pivot, independent of the cowling.
+    prop_center=(3.40,0,1.34)
+    propeller=b.empty('propeller_pivot',prop_center)
+    b.parent(b.cylinder('propeller_hub',(3.25,0,1.34),(3.46,0,1.34),.17,alloy,vertices=40),propeller)
+    radial_stations=[(.16,.13),(.26,.19),(.40,.235),(.57,.25),(.74,.22),(.89,.175),(.99,.12),(1.035,.065)]
+    profile_u=[.5-.5*math.cos(math.pi*j/30) for j in range(31)]
+    profile=[(u,1) for u in profile_u]+[(u,-1) for u in reversed(profile_u[1:-1])]
+    for blade in range(3):
+        angle=math.radians(20+blade*120)
+        vv=[]
+        for radius,chord in radial_stations:
+            fraction=(radius-.16)/(1.035-.16)
+            pitch=math.radians(35-23*fraction)
+            for u,sign in profile:
+                chordwise=(u-.28)*chord
+                thick=sign*thickness(u,.11)*chord
+                x=prop_center[0]+chordwise*math.sin(pitch)+thick*math.cos(pitch)
+                tangent=chordwise*math.cos(pitch)-thick*math.sin(pitch)
+                y=radius*math.sin(angle)+tangent*math.cos(angle)
+                z=prop_center[2]+radius*math.cos(angle)-tangent*math.sin(angle)
+                vv.append((x,y,z))
+        n=len(profile); ff=[]
+        for i in range(len(radial_stations)-1):
+            ff.extend((i*n+j,i*n+(j+1)%n,(i+1)*n+(j+1)%n,(i+1)*n+j) for j in range(n))
+        ff += [tuple(reversed(range(n))),tuple((len(radial_stations)-1)*n+j for j in range(n))]
+        obj=b.mesh('propeller_blade',vv,ff,composite,smooth=True)
+        obj.data.materials.append(orange)
+        obj.data.materials.append(ivory)
+        for i in range(len(radial_stations)-1):
+            if i>=len(radial_stations)-3:
+                for j in range(n): obj.data.polygons[i*n+j].material_index=1 if i==len(radial_stations)-2 else 2
+        b.parent(obj,propeller)
+    spinner_sections=[(3.40,.235),(3.49,.220),(3.60,.185),(3.71,.140),(3.82,.087),(3.90,.038),(3.94,.008)]
+    vv=[]
+    for x,radius in spinner_sections:
+        for j in range(64):
+            a=math.tau*j/64
+            vv.append((x,radius*math.cos(a),1.34+radius*math.sin(a)))
+    ff=[]
+    for i in range(len(spinner_sections)-1):
+        ff.extend((i*64+j,i*64+(j+1)%64,(i+1)*64+(j+1)%64,(i+1)*64+j) for j in range(64))
+    ff += [tuple(reversed(range(64))),tuple((len(spinner_sections)-1)*64+j for j in range(64))]
+    b.parent(b.mesh('spinner',vv,ff,ivory,smooth=True),propeller)
+    b.parent(b.torus('spinner_backplate',(3.40,0,1.34),.235,.007,steel,axis='X',major_segments=64,minor_segments=8),propeller)
+
+    # Small operational details convey scale without branding.
+    b.tube('left_pitot_probe',[(.16,2.36,.94),(.33,2.36,.77),(.71,2.36,.77)],.012,steel)
+    b.sphere('belly_drain',(-1.7,0,1.0),(.04,.04,.035),steel,segments=12,rings=6)
+    b.box('gps_antenna',(-.28,0,2.245),(.18,.12,.045),ivory,bevel=.035)
+    b.cylinder('vhf_whip_antenna',(-.75,0,2.09),(-1.02,0,2.55),.010,steel,vertices=12,radius2=.003)
+    for side in (-1,1):
+        b.sphere('landing_light_housing',(.77,side*1.05,1.02),(.045,.14,.07),graphite,segments=24,rings=12)
+        b.sphere('landing_light_lens',(.805,side*1.05,1.02),(.022,.10,.047),lamp,segments=24,rings=12)
+
+    # Conservative static boxes. Moving surfaces and the propeller sweep need
+    # engine-specific dynamic collision/flight logic rather than broad boxes.
+    b.collision_box('fuselage',(.15,0,1.46),(6.7,1.20,1.30))
+    b.collision_box('left_wing',(-.16,2.95,1.17),(1.57,4.85,.28),rotation=(math.radians(4.),0,0))
+    b.collision_box('right_wing',(-.16,-2.95,1.17),(1.57,4.85,.28),rotation=(-math.radians(4.),0,0))
+    b.collision_box('tailplane',(-3.04,0,1.63),(1.0,3.60,.14))
+    b.collision_box('fin',(-3.12,0,2.29),(1.03,.16,1.42))
+    b.collision_box('nose_gear',(2.10,0,.53),(.48,.20,1.04))
+    b.collision_box('left_main_gear',(-.45,1.18,.47),(.57,.24,.92))
+    b.collision_box('right_main_gear',(-.45,-1.18,.47),(.57,.24,.92))
+    return {
+        'description':'Original low-wing single-engine touring airplane with tapered cambered wings, separate control surfaces, tricycle landing gear and a three-blade propeller.',
+        'dimensions_design_m':{'fuselage_with_spinner_length':7.79,'wingspan':10.8,'fin_height':3.02},
+        'moving_parts':['propeller_pivot','nose_wheel_pivot','left_wheel_pivot','right_wheel_pivot',
+                        'left_aileron_pivot','right_aileron_pivot','left_flap_pivot','right_flap_pivot',
+                        'elevator_pivot','rudder_pivot'],
+        'pivot_notes':'Propeller: local X. Wheels: local Y. Flaps/ailerons: local Y aligned outboard along their swept, dihedral hinge line (left/right signs differ). Elevator: local Y. Rudder: local Z. No animation clips or flight rig are provided.',
+        'notes':['Cockpit glazing is opaque smoked material; no finished interior.',
+                 'Airfoils are visual NACA-inspired approximations, not aerodynamic certification.',
+                 'Eight static collision boxes exclude the propeller sweep and require target-engine tuning.',
+                 'Control surfaces are independent closed meshes with geometric hinge gaps; low LODs need visual review.']
+    }
 
 if __name__ == "__main__":
     main()

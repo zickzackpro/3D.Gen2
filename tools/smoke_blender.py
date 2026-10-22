@@ -18,6 +18,7 @@ from pathlib import Path
 import sys
 
 import bpy
+from mathutils import Matrix, Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from validate_exports import GLB  # noqa: E402
@@ -26,6 +27,20 @@ from validate_exports import GLB  # noqa: E402
 EXPECTED_ROLES = {
     "enduro": {"enduro_steering_pivot", "enduro_front_wheel_pivot", "enduro_rear_wheel_pivot"},
     "helicopter": {"main_rotor_pivot", "tail_rotor_pivot"},
+    "airplane": {
+        "propeller_pivot", "nose_wheel_pivot", "left_wheel_pivot", "right_wheel_pivot",
+        "left_aileron_pivot", "right_aileron_pivot", "left_flap_pivot", "right_flap_pivot",
+        "elevator_pivot", "rudder_pivot",
+    },
+}
+
+PIVOT_AXES = {
+    "enduro_steering_pivot": "Z", "enduro_front_wheel_pivot": "Y",
+    "enduro_rear_wheel_pivot": "Y", "main_rotor_pivot": "Z", "tail_rotor_pivot": "Y",
+    "propeller_pivot": "X", "nose_wheel_pivot": "Y", "left_wheel_pivot": "Y",
+    "right_wheel_pivot": "Y", "left_aileron_pivot": "Y", "right_aileron_pivot": "Y",
+    "left_flap_pivot": "Y", "right_flap_pivot": "Y", "elevator_pivot": "Y",
+    "rudder_pivot": "Z",
 }
 
 
@@ -85,6 +100,61 @@ def descendant_meshes(root):
     return found
 
 
+def check_pivot_rotation(pivot, children, objects, axis_name):
+    """Exercise the exported hierarchy, then restore the imported scene exactly."""
+    role = pivot["part_role"]
+    basis = pivot.matrix_basis.copy()
+    world = pivot.matrix_world.copy()
+    origin = world.translation.copy()
+    axis = Vector({"X": (1, 0, 0), "Y": (0, 1, 0), "Z": (0, 0, 1)}[axis_name])
+    local_from_world = world.inverted()
+    candidate = None
+    largest_radius = -1.0
+    # A hub-centre or hinge vertex may legitimately stay still. Choose the
+    # descendant vertex furthest from the pivot's declared local axis.
+    for child in children:
+        local_from_mesh = local_from_world @ child.matrix_world
+        for vertex in child.data.vertices:
+            local = local_from_mesh @ vertex.co
+            radius = (local - axis * local.dot(axis)).length
+            if radius > largest_radius:
+                largest_radius = radius
+                candidate = (child, vertex.co.copy())
+    check(candidate is not None and largest_radius > 1e-4,
+          f"{role} has no geometry away from its rotation axis")
+    child, vertex = candidate
+    point_before = child.matrix_world @ vertex
+    radius_before = (point_before - origin).length
+    unrelated = [obj for obj in objects if obj.type == "MESH" and obj not in children]
+    check(unrelated, f"{role} has no independent geometry to test isolation")
+    references = [(obj, obj.matrix_world.copy()) for obj in unrelated]
+    angle = math.radians(17)
+    try:
+        pivot.matrix_basis = basis @ Matrix.Rotation(angle, 4, axis_name)
+        bpy.context.view_layer.update()
+        point_after = child.matrix_world @ vertex
+        displacement = (point_after - point_before).length
+        check((pivot.matrix_world.translation - origin).length < 2e-5,
+              f"{role} rotation moved its own pivot origin")
+        check(displacement > 1e-5, f"{role} rotation did not move its descendant geometry")
+        check(math.isclose((point_after - origin).length, radius_before, rel_tol=1e-5, abs_tol=2e-5),
+              f"{role} rotation changed the distance between its geometry and pivot")
+        expected = pivot.matrix_world @ local_from_world @ point_before
+        check((point_after - expected).length < 3e-5,
+              f"{role} descendant did not follow the pivot's rigid rotation")
+        for obj, transform in references:
+            delta = max(abs(obj.matrix_world[row][col] - transform[row][col])
+                        for row in range(4) for col in range(4))
+            check(delta < 2e-5, f"Rotating {role} also moved unrelated geometry {obj.name}")
+    finally:
+        pivot.matrix_basis = basis
+        bpy.context.view_layer.update()
+    check((child.matrix_world @ vertex - point_before).length < 3e-5,
+          f"{role} geometry did not return to its initial position")
+    return {"local_axis": axis_name, "angle_degrees": 17,
+            "tested_vertex_displacement_m": round(displacement, 6)}
+
+
 def check_images(path):
     expected = len(GLB(path).doc.get("images", []))
     referenced = {
@@ -131,7 +201,7 @@ def check_asset(manifest_path):
     check(actual["mesh_objects"] == lod["mesh_objects"],
           f"{name} LOD0 mesh object count differs from manifest")
     check_bounds(actual["bounds"], manifest["source_bounds"], name + " LOD0")
-    roles = {}
+    roles, rotations = {}, {}
     for role in sorted(EXPECTED_ROLES[name]):
         matches = [obj for obj in objects if obj.get("part_role") == role]
         check(len(matches) == 1, f"Expected one preserved {role} pivot; found {len(matches)}")
@@ -140,6 +210,7 @@ def check_asset(manifest_path):
         children = descendant_meshes(pivot)
         check(children, f"Pivot {role} has no mesh descendants")
         roles[role] = len(children)
+        rotations[role] = check_pivot_rotation(pivot, children, objects, PIVOT_AXES[role])
     textures = check_images(lod_path)
     check(textures > 0, f"{name} lost all embedded textures")
     for obj in objects:
@@ -157,6 +228,7 @@ def check_asset(manifest_path):
           "Collision proxy extras did not survive import")
     return {"asset": name, "ok": True, "lod0": actual,
             "pivot_mesh_descendants": roles, "embedded_images": textures,
+            "pivot_rotation_checks": rotations,
             "collision": collision}
 
 
@@ -176,7 +248,7 @@ def main():
             errors.append({"manifest": str(path), "error": str(error)})
     result = {"ok": not errors, "blender_version": bpy.app.version_string,
               "assets": reports, "errors": errors,
-              "scope": "Blender GLB import, transforms, articulation hierarchy and embedded textures; no rendering or engine acceptance."}
+              "scope": "Blender GLB import, transforms, pivot rotation/isolation and embedded textures; no rendering or engine acceptance."}
     print("BLENDER_ROUNDTRIP_RESULT " + json.dumps(result, indent=2), flush=True)
     check(not errors, "Blender GLB round-trip validation failed; see JSON report")
 
