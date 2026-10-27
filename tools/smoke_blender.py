@@ -36,6 +36,9 @@ EXPECTED_ROLES = {
         "front_left_steering_pivot", "front_right_steering_pivot",
         "front_left_wheel_pivot", "front_right_wheel_pivot",
         "rear_left_wheel_pivot", "rear_right_wheel_pivot",
+        "hood_hinge_pivot", "cabin_steering_pivot", "gear_lever_pivot",
+        "transfer_lever_pivot", "handbrake_pivot", "accelerator_pivot",
+        "brake_pivot", "clutch_pivot",
     },
     "motorboat": {
         "outboard_trim_pivot", "outboard_steering_pivot",
@@ -53,6 +56,9 @@ PIVOT_AXES = {
     "front_left_steering_pivot": "Z", "front_right_steering_pivot": "Z",
     "front_left_wheel_pivot": "Y", "front_right_wheel_pivot": "Y",
     "rear_left_wheel_pivot": "Y", "rear_right_wheel_pivot": "Y",
+    "hood_hinge_pivot": "Y", "cabin_steering_pivot": "X", "gear_lever_pivot": "Y",
+    "transfer_lever_pivot": "Y", "handbrake_pivot": "Y", "accelerator_pivot": "Y",
+    "brake_pivot": "Y", "clutch_pivot": "Y",
     "outboard_trim_pivot": "Y", "outboard_steering_pivot": "Z",
     "boat_propeller_pivot": "X", "boat_steering_wheel_pivot": "X",
 }
@@ -142,7 +148,10 @@ def check_pivot_rotation(pivot, children, objects, axis_name):
     unrelated = [obj for obj in objects if obj.type == "MESH" and obj not in children]
     check(unrelated, f"{role} has no independent geometry to test isolation")
     references = [(obj, obj.matrix_world.copy()) for obj in unrelated]
-    angle = math.radians(17)
+    low, high = pivot.get("rotation_min_degrees", -180), pivot.get("rotation_max_degrees", 180)
+    angle_degrees = min(17, high) if high > 0 else max(-17, low)
+    check(abs(angle_degrees) > 0, f"{role} has no permitted travel")
+    angle = math.radians(angle_degrees)
     try:
         pivot.matrix_basis = basis @ Matrix.Rotation(angle, 4, axis_name)
         bpy.context.view_layer.update()
@@ -165,7 +174,7 @@ def check_pivot_rotation(pivot, children, objects, axis_name):
         bpy.context.view_layer.update()
     check((child.matrix_world @ vertex - point_before).length < 3e-5,
           f"{role} geometry did not return to its initial position")
-    return {"local_axis": axis_name, "angle_degrees": 17,
+    return {"local_axis": axis_name, "angle_degrees": angle_degrees,
             "tested_vertex_displacement_m": round(displacement, 6)}
 
 
@@ -231,7 +240,7 @@ def check_glazing_transmission(objects, path, label, expected_factor=None):
 
 
 def check_offroader_components(objects, path):
-    """Verify nested steering and the actual exported/imported glazing material."""
+    """Verify steering, optical materials and engine access through the opening hood."""
     by_role = {obj.get("part_role"): obj for obj in objects if obj.get("part_role")}
     parents = {}
     for side in ("left", "right"):
@@ -241,7 +250,39 @@ def check_offroader_components(objects, path):
               f"{wheel_role} is not directly parented to {steering_role}")
         parents[wheel_role] = steering_role
     glazing = check_glazing_transmission(objects, path, "Offroader")
-    return {"front_wheel_parents": parents, "glazing_transmission": glazing}
+    check(any("optical_polycarbonate" in item["material"] for item in glazing),
+          "Headlamp optics lost their transmitting material")
+    document = GLB(path).doc
+    coated = [mat for mat in document.get("materials", [])
+              if mat.get("extensions", {}).get("KHR_materials_clearcoat", {}).get("clearcoatFactor", 0) > 0]
+    check(any("sage_paint" in mat.get("name", "") for mat in coated), "Paint lost its clearcoat")
+    paint_indices={i for i,mat in enumerate(document.get("materials", [])) if "sage_paint" in mat.get("name", "")}
+    paint_primitives=[p for mesh in document.get("meshes", []) for p in mesh.get("primitives", [])
+                      if p.get("material") in paint_indices]
+    check(paint_primitives and all("COLOR_0" in p.get("attributes", {}) for p in paint_primitives),
+          "Baked paint and road-dust vertex colors were lost during export")
+    engine = by_role.get("engine_bay_assembly")
+    check(engine is not None, "Engine bay assembly missing from export")
+    engine_meshes = descendant_meshes(engine)
+    check(engine_meshes, "Engine bay contains no exported geometry")
+    hood = by_role["hood_hinge_pivot"]
+    hood_meshes = descendant_meshes(hood)
+    basis = hood.matrix_basis.copy()
+    def downward_hit():
+        bpy.context.view_layer.update()
+        hit = bpy.context.scene.ray_cast(bpy.context.evaluated_depsgraph_get(),
+                                         Vector((1.40, 0, 3.0)), Vector((0, 0, -1)), distance=3.0)
+        check(hit[0], "No geometry beneath engine-bay inspection ray")
+        return hit[4].original
+    check(downward_hit() in hood_meshes, "Closed hood does not cover the engine bay")
+    try:
+        hood.matrix_basis = basis @ Matrix.Rotation(math.radians(-65), 4, "Y")
+        check(downward_hit() in engine_meshes, "Opening the hood does not expose the modeled engine")
+    finally:
+        hood.matrix_basis = basis
+        bpy.context.view_layer.update()
+    return {"front_wheel_parents": parents, "glazing_transmission": glazing,
+            "paint_clearcoat": True, "surface_vertex_colors": True, "engine_access_after_hood_open": True}
 
 
 def check_motorboat_components(objects, path, bounds, source_bounds):

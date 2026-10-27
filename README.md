@@ -59,7 +59,9 @@ Die Enduro enthält Speichenräder, modellierte Stollen, Bremsscheiben mit Aussp
 
 Das Flugzeug ergänzt einen geformten Rumpf, profilierte Tragflächen, Dreiblattpropeller mit Spinner, Fahrwerk mit drei Rädern, Querruder, Landeklappen, Höhen- und Seitenruder sowie Cockpitverglasung, Lufteinlässe und Positionslichter. Zehn Drehpunkte trennen Propeller, Räder und Steuerflächen für spätere Animationen. Auch hier ist die Verglasung **opak** und es gibt keine ausgearbeitete Innenkabine oder Flugsimulation.
 
-Der Geländewagen enthält offene Radausschnitte, grob profilierte Reifen, ein Reserverad, Leiterrahmen, Achsen, Differentiale, Antriebswellen, Federn und Dämpfer. Seilwinde, Bergungsösen, Schnorchel und Dachträger ergänzen die Karosserie. Der einfache Innenraum besteht aus Sitzen, Armaturenbrett, Lenkrad, Mittelkonsole und Gurten. Die Scheiben besitzen Lichtdurchlässigkeit; im GLB wird dafür `KHR_materials_transmission` verwendet. Diesen Materialtyp muss der Ziel-Importer unterstützen. Türen, Innenraum-Lenkrad und Federung sind statisch; eine Allrad-Fahrphysik oder fertige Cockpit-Interaktion ist nicht enthalten.
+Der Geländewagen enthält offene Radausschnitte, profilierte Reifen, ein Reserverad, Leiterrahmen, Achsen, Differentiale, Antriebswellen, Federn und Dämpfer. Die geformte Motorhaube lässt sich öffnen. Darunter liegen ein modellierter Reihenvierzylinder, Ansaugung, Riementrieb, Kühler mit Lüfter, Batterie, Behälter und Leitungen. Die Front besitzt einen offenen Kühlergrill sowie runde Scheinwerfer mit Reflektoren, Projektorlinsen, transparenter Abdeckung und schmalem Tagfahrlichtring. Lack mit Klarlackschicht, Seilwinde, Schnorchel und Dachträger ergänzen die Karosserie.
+
+Der überarbeitete Innenraum enthält gepolsterte Sitze, Nähte, Gurte, ein geformtes Armaturenbrett, beschriftete Instrumente, eine statische Navigationsanzeige, Klimaregler, runde Luftausströmer und Türlautsprecher. Lenkrad, Gang- und Verteilergetriebehebel, Handbremse, Gas, Bremse und Kupplung haben getrennte Drehpunkte. Türen und Federung bleiben statisch; Fahrphysik und interaktive Anzeigen sind nicht enthalten. Transparente Scheiben/Linsen verwenden `KHR_materials_transmission`, der Lack `KHR_materials_clearcoat`; die Ziel-Engine muss diese Materialerweiterungen unterstützen. [Details, Ansichten und Bedienachsen](docs/offroader.md).
 
 Das Motorboot enthält einen geformten tiefen V-Rumpf, Deck und Cockpitboden, Bugpolster, Einzelsitze und Heckbank, einen Steuerstand mit Instrumenten sowie Reling und Beschläge. Die geteilte Windschutzscheibe verwendet ebenfalls `KHR_materials_transmission`. Der Außenborder besitzt eine Motorhaube, Unterwasserteil und profilierten Propeller. Vier Drehpunkte trennen Motortrimmung, Außenborderlenkung, Propeller und Lenkrad. Die Geometrie ist keine geprüfte Schiffskonstruktion und enthält keine Auftriebs-, Wellen- oder Antriebssimulation.
 
@@ -73,7 +75,7 @@ Die Dateien einzeln in den glTF-fähigen Importer der Ziel-Engine übernehmen. L
 
 Beim Flugzeug rotiert der Propeller um sein lokales X, die drei Räder um Y, Querruder/Landeklappen/Höhenruder um ihre jeweils ausgerichtete lokale Y-Achse und das Seitenruder um seine lokale Z-Achse. Die Kollisionskörper sind statische Näherungen; Propellerbewegung und Steuerflächen benötigen eigene Engine-Einstellungen.
 
-Der Geländewagen hat sechs Drehpunkte: vier Radachsen um lokales Y und zwei vordere Lenkachsen um lokales Z. Jedes Vorderrad ist seinem Lenk-Drehpunkt untergeordnet, sodass Rollen und Lenken unabhängig kombiniert werden können. Lenkgeometrie, Federwege, Radkollision und Antriebsmomente müssen in der Engine eingerichtet werden.
+Der Geländewagen hat 14 Drehpunkte: vier Radachsen um lokales Y, zwei vordere Lenkachsen um lokales Z, eine Haubenscharnierachse um Y, ein geneigtes Innenraum-Lenkrad um lokales X sowie Schalthebel, Verteilergetriebehebel, Handbremse und drei Pedale um lokales Y. Jedes Vorderrad ist seinem Lenk-Drehpunkt untergeordnet. Die Haube öffnet mit negativer Rotation bis −72°. Weitere Winkelgrenzen sind als Extras am jeweiligen Bedienelement gespeichert. Lenkgeometrie, Federwege, Radkollision und Antriebsmomente müssen in der Engine eingerichtet werden.
 
 Beim Motorboot ist **Z = 0 die nominale Wasserlinie** der Blender-Quelldatei; nach glTF-Konvertierung entspricht das **Y = 0**. Die tatsächliche Schwimmlage wird nicht berechnet. Der Motor klappt um lokales Y, die darunter angeordnete Lenkachse rotiert um Z und der Propeller darunter um X. Das Lenkrad dreht unabhängig um seine ausgerichtete lokale X-Achse. Die Engine muss Lenkung, Trimmung, Propeller, Kabelbewegung und Auftrieb miteinander verbinden. Die acht Kollisionskörper sind statische Näherungen und kein berechnetes Verdrängungsvolumen.
 
@@ -91,7 +93,7 @@ blender --background --factory-startup --python-exit-code 1 --python tools/smoke
 
 Der unabhängige Validator prüft GLB-Struktur, Hierarchie, Referenzen, gültige Dreiecksindizes, endliche Geometriewerte, Normalen/UVs, eingebettete Bilder und abnehmende LOD-Dreieckszahlen. Er gibt JSON auf stdout aus und beendet sich bei Fehlern mit einem Fehlercode. Er bewertet weder Ästhetik noch Fahrzeugphysik und ersetzt keinen Engine-Test.
 
-Der Blender-Smoke-Test importiert LOD0 und Kollisionen in frische Szenen. Er vergleicht Dateihashes, Maße und Dreieckszahlen mit dem Manifest und liest die eingebetteten Texturen. Er rotiert jeden Drehpunkt probeweise, prüft die Bewegung seiner Bauteile sowie die unveränderte Position unabhängiger Geometrie und setzt die Szene anschließend zurück. Zusätzlich prüft er die verschachtelten Lenkachsen des Geländewagens, die Außenborderhierarchie des Motorboots, dessen Geometrie oberhalb und unterhalb der Wasserlinie sowie den Erhalt der lichtdurchlässigen Glasmaterialien beider Modelle.
+Der Blender-Smoke-Test importiert LOD0 und Kollisionen in frische Szenen. Er vergleicht Dateihashes, Maße und Dreieckszahlen mit dem Manifest und liest die eingebetteten Texturen. Er rotiert jeden Drehpunkt innerhalb seiner angegebenen Grenzen probeweise, prüft die Bewegung seiner Bauteile sowie die unveränderte Position unabhängiger Geometrie und setzt die Szene anschließend zurück. Beim Geländewagen prüft er außerdem verschachtelte Lenkachsen, Klarlack, transparente Optiken und per Sichtstrahl, dass die geschlossene Haube den Motor bedeckt und die geöffnete Haube ihn freigibt. Beim Motorboot werden Außenborderhierarchie, Wasserlinie und Verglasung geprüft.
 
 Die mit Blender 4.3.2 erzeugten Standardmodelle haben folgende Dreieckszahlen:
 
@@ -100,7 +102,7 @@ Die mit Blender 4.3.2 erzeugten Standardmodelle haben folgende Dreieckszahlen:
 | Enduro | 142.576 | 70.568 | 32.030 | 4 Boxen |
 | Helikopter | 85.220 | 41.216 | 17.673 | 6 Boxen |
 | Flugzeug | 97.120 | 47.464 | 20.825 | 8 Boxen |
-| Geländewagen | 142.772 | 73.790 | 37.111 | 10 Boxen |
+| Geländewagen | 213.896 | 104.908 | 48.507 | 10 Boxen |
 | Motorboot | 72.374 | 35.564 | 16.088 | 8 Boxen |
 
 Andere Blender-Versionen können bei automatischer Vereinfachung und UV-Erstellung abweichende Ergebnisse liefern. Die aktuellen Zahlen stehen immer in den erzeugten Manifesten.
