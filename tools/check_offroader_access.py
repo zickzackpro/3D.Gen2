@@ -6,10 +6,11 @@ Run in a fresh background Blender process, for example:
     --python tools/check_offroader_access.py -- \
     generated/offroader/offroader.blend --json /tmp/offroader-access.json
 
-Checks representative opening poses against the body, interior and other
-closed leaves. Intentional hinge/pin and latch/striker mating interfaces are
-excluded as obstacles. Moving hinge straps are still checked against pillars.
-BVH surface intersections are a geometric regression check, not a continuous
+Checks initial 5/10-degree opening poses and representative wider angles
+against the body, interior and other closed leaves. Intentional hinge/pin and
+latch/striker mating interfaces are excluded as obstacles. Moving hinge straps are still checked against pillars.
+Fixed tailgate hinge leaves must also touch their intended pillar mounts within
+1 mm. BVH surface intersections are a geometric regression check, not a continuous
 collision simulation, a clearance tolerance certificate or an engine test.
 The input file is never saved or modified.
 """
@@ -91,7 +92,7 @@ def validate(path):
     report = {
         "source": path.name,
         "source_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-        "scope": "Representative-pose BVH surface intersections; no runtime physics or continuous sweep certification",
+        "scope": "Representative-pose BVH surface intersections and fixed hinge mounting contact; no runtime physics or continuous sweep certification",
         "fixed_obstacle_meshes": len(obstacles),
         "excluded_fixed_mating_interfaces": excluded,
         "sweeps": {},
@@ -104,7 +105,7 @@ def validate(path):
         samples = []
         original_rotation = pivot.rotation_euler.copy()
         try:
-            for angle in (15, 35, 55, maximum):
+            for angle in (5, 10, 15, 35, 55, maximum):
                 pivot.rotation_euler.z = math.radians(direction * angle)
                 bpy.context.view_layer.update()
                 hits = []
@@ -139,7 +140,34 @@ def validate(path):
     margins["tailgate_above_threshold_m"] = (
         closed_geometry[tailgate[0].name][1].z - closed_geometry[threshold[0].name][2].z)
     report["vertical_clearances_m"] = margins
-    report["passed"] = not all_hits and all(value > .003 for value in margins.values())
+
+    # The opening axis can remain correct while a fixed bracket floats beside
+    # a narrowed pillar. Check actual mounting surfaces, not custom metadata.
+    hinge_leaves = [obj for obj in fixed if "tailgate_fixed_hinge_leaf" in obj.name]
+    mounts = [obj for obj in fixed if "rear_corner_pillar" in obj.name
+              or "pressed_cabin_pillar_3" in obj.name]
+    check(len(hinge_leaves) == 2 and mounts, "Missing fixed tailgate hinge mounts")
+    contacts = {}
+    for leaf in hinge_leaves:
+        leaf_tree = closed_geometry[leaf.name][0]
+        candidates = []
+        for mount in mounts:
+            mount_tree = closed_geometry[mount.name][0]
+            overlap = leaf_tree.overlap(mount_tree)
+            distance = 0.0 if overlap else min(
+                [mount_tree.find_nearest(leaf.matrix_world @ vertex.co)[3]
+                 for vertex in leaf.data.vertices]
+                + [leaf_tree.find_nearest(mount.matrix_world @ vertex.co)[3]
+                   for vertex in mount.data.vertices])
+            candidates.append({"mount": mount.name,
+                               "surface_distance_m": distance,
+                               "intersecting_face_pairs": len(overlap)})
+        contacts[leaf.name] = min(candidates, key=lambda item: item["surface_distance_m"])
+    report["fixed_hinge_mount_contacts"] = contacts
+    report["hinge_mount_tolerance_m"] = .001
+    report["passed"] = (not all_hits and all(value > .003 for value in margins.values())
+                        and all(item["surface_distance_m"] <= .001
+                                for item in contacts.values()))
     return report
 
 
@@ -158,7 +186,7 @@ def main():
         args.json.parent.mkdir(parents=True, exist_ok=True)
         args.json.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
-    check(report["passed"], "Access geometry intersects an obstacle or has insufficient vertical clearance")
+    check(report["passed"], "Access geometry intersects an obstacle, has insufficient clearance, or has an unmounted hinge leaf")
 
 
 if __name__ == "__main__":

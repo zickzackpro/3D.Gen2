@@ -58,6 +58,7 @@ def main():
         camera=scene.camera
         camera.data.type='PERSP'
         camera.data.clip_start=.01
+        camera.data.clip_end=2000.
         studio=bpy.data.collections['STUDIO_RENDER_ONLY']
         poses={}
         def pose(role,angle):
@@ -109,7 +110,7 @@ def main():
                                ('rear_right_door_hinge_pivot',55),
                                ('tailgate_hinge_pivot',95)):
                 pose(role,angle)
-            camera.location=(-4.6,4.8,3.4)
+            camera.location=(-4.6,4.8,4.2)
             target=Vector((-.5,0,1.05))
             camera.data.lens=42
         camera.rotation_euler=(target-camera.location).to_track_quat('-Z','Y').to_euler()
