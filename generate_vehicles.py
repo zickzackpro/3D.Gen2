@@ -1912,11 +1912,11 @@ def offroader_finish_materials(b, m):
 
     # Distinct dielectric finishes. No fake lighting or all-over scratch pattern.
     recipes={
-        'paint':('paint',.285,.12,.070,.0000040,.009),
+        'paint':('paint',.255,0.,.070,.0000028,.006),
         'roof':('paint',.325,0.,.070,.0000045,.012),
-        'trim':('polymer',.565,0.,.065,.000018,.024),
-        'interior':('polymer',.635,0.,.070,.000022,.029),
-        'leather':('leather',.495,0.,.080,.000032,.043),
+        'trim':('polymer',.640,0.,.065,.000014,.020),
+        'interior':('polymer',.690,0.,.070,.000018,.025),
+        'leather':('leather',.575,0.,.080,.000025,.035),
         'rubber':('rubber',.855,0.,.085,.000013,.017),
         'tread':('rubber',.895,0.,.080,.000018,.020),
         'fabric':('cloth',.790,0.,.040,.000018,.033),
@@ -2111,7 +2111,7 @@ def prepare_offroader_body_surfacing(b):
             'quarter_lower_rail','quarter_belt_moulding','window_header','roof_gutter',
             'door_glass','door_window_frame','door_window_seal','door_window_lower_rail',
             'door_belt_moulding','door_inner_glass_scraper','painted_jamb_return',
-            'body_weather_seal','mirror_arm','mirror_housing','mirror_glass',
+            'body_weather_seal','mirror_arm','mirror_mount','mirror_housing','mirror_glass',
             'windshield','windscreen_wiper','rear_corner_pillar','tailgate_glass',
             'tailgate_window_frame','tailgate_window_seal','tailgate_mobile_window',
             'rear_glass_defroster','rear_defroster_terminal','rear_window_wiper',
@@ -2164,7 +2164,7 @@ def offroader4_closed_rings(b, name, rings, material, smooth=True):
 
 def build_offroader_roof_equipment(b, m):
     """Thin rolled roof edge, broad compound crown and a restrained low rack."""
-    outline=offroader4_round_plan(2.42,1.51,.105,steps=10)
+    outline=offroader4_round_plan(2.40,1.49,.105,steps=10)
     profile=[(.06,2.075),(.35,2.072),(.65,2.059),(.90,2.044),
              (.985,2.042),(1.000,2.048),(1.002,2.061),(.995,2.073),
              (.96,2.078),(.80,2.090),(.60,2.101),(.30,2.109),(.06,2.111)]
@@ -2203,7 +2203,7 @@ def offroader4_bumper_section(y, front=True):
     """Center, radii and roll-up of the smoothly swept bumper wing."""
     t=abs(y)/.97
     if front:
-        center_x=2.142-.115*t**3
+        center_x=2.142-.135*t**3
         center_z=.735+.033*t*t
         depth=.145-.040*t**4
         half_height=.103-.040*t**5
@@ -2236,7 +2236,7 @@ def offroader4_bumper_shell(b,name,material,front=True):
         rings.append([(cx+x,y,cz+z) for x,z in section])
     obj=offroader4_closed_rings(b,name,rings,material)
     obj['component']='swept_bumper_with_rolled_wings'
-    obj['wing_sweep_m']=.115 if front else .105
+    obj['wing_sweep_m']=.135 if front else .105
     return obj
 
 def offroader4_bumper_cut(b,bumper,name,location,size,rotation=None,bevel=.02):
@@ -2397,9 +2397,9 @@ def build_offroader_access_doors(b, m, body_side, side, side_name):
         glass_points=offroader_access_side_points(window,side,.001)
         offroader_access_glass(b,m,name+'_door_glass',glass_points,(0,.006,0),role)
         frame_points=offroader_access_side_points(window+window[:1],side,-.003)
-        offroader_access_path(b,name+'_door_window_frame',frame_points,.0115,paint,role)
+        offroader_access_path(b,name+'_door_window_frame',frame_points,.0085,paint,role)
         offroader_access_path(b,name+'_door_window_seal',
-              offroader_access_side_points(window+window[:1],side,-.007),.006,m['rubber'],role)
+              offroader_access_side_points(window+window[:1],side,-.007),.0045,m['rubber'],role)
         bottom_x=[p[0] for p in window if p[1]==min(q[1] for q in window)]
         rail_center=(min(bottom_x)+max(bottom_x))*.5
         rail_length=max(bottom_x)-min(bottom_x)+.023
@@ -2561,7 +2561,7 @@ def rig_offroader_access(b, m):
 def build_offroader(b):
     """Original expedition 4x4 with a hollow cabin and articulated road wheels."""
     m = {
-        'paint': b.mat('offroader_sage_paint', (.105,.163,.119), metallic=.12, roughness=.29),
+        'paint': b.mat('offroader_sage_paint', (.105,.163,.119), metallic=0., roughness=.255),
         'roof': b.mat('offroader_sand_roof', (.55,.51,.40), metallic=0, roughness=.32),
         'trim': b.mat('offroader_graphite_trim', (.018,.024,.027), roughness=.46),
         'rubber': b.mat('offroader_tire_rubber', (.012,.016,.018), roughness=.85),
@@ -2575,9 +2575,9 @@ def build_offroader(b):
         'red': b.mat('offroader_red_lens', (.50,.008,.005), roughness=.23, emission=(.55,.008,.004)),
         'amber': b.mat('offroader_amber_lens', (.90,.20,.012), roughness=.23, emission=(.70,.10,.003)),
         'lamp': b.mat('offroader_led_lens', (.70,.82,.90), roughness=.16, emission=(.48,.61,.74)),
-        'fabric': b.mat('offroader_woven_seat', (.095,.080,.060), roughness=.72),
-        'seat_insert': b.mat('offroader_seat_insert', (.095,.080,.060), roughness=.74),
-        'leather': b.mat('offroader_saddle_leather', (.19,.10,.046), roughness=.48),
+        'fabric': b.mat('offroader_woven_seat', (.065,.060,.050), roughness=.79),
+        'seat_insert': b.mat('offroader_seat_insert', (.065,.060,.050), roughness=.79),
+        'leather': b.mat('offroader_saddle_leather', (.16,.087,.045), roughness=.575),
         'stitch': b.mat('offroader_sand_stitch', (.26,.18,.10), roughness=.80),
         'cast': b.mat('offroader_cast_engine_alloy', (.22,.24,.25), metallic=.85, roughness=.49),
         'reservoir': b.mat('offroader_reservoir_plastic', (.65,.65,.50), roughness=.39),
@@ -2588,8 +2588,8 @@ def build_offroader(b):
     }
     for key in ('paint', 'roof'):
         shader = m[key].node_tree.nodes.get('Principled BSDF')
-        shader.inputs['Coat Weight'].default_value = .75
-        shader.inputs['Coat Roughness'].default_value = .20
+        shader.inputs['Coat Weight'].default_value = .80 if key=='paint' else .35
+        shader.inputs['Coat Roughness'].default_value = .13 if key=='paint' else .22
         for node in m[key].node_tree.nodes:
             if node.type == 'NORMAL_MAP':
                 node.inputs['Strength'].default_value = .035
@@ -2635,7 +2635,7 @@ def build_offroader(b):
     b.collision_box('rear_spare', (-2.16,0,1.22), (.30,.86,.86))
     b.collision_box('roof_rack', (-.80,0,2.17), (2.15,1.65,.22))
     return {
-        'description': 'Original expedition 4x4 with crowned body panels, tapered upper cabin, thin sculpted roof, swept bumpers, opening doors and tailgate, detailed engine bay and contoured interior.',
+        'description': 'Original expedition 4x4 with formed hood shoulders, enlarged recessed optics, a curved grille, slender glazing frames, opening doors and tailgate, detailed engine bay and a stitched contoured interior.',
         'dimensions_design_m': {'wheelbase': 2.64, 'track': 1.84, 'tire_diameter': .86},
         'moving_parts': ['front_left_steering_pivot','front_right_steering_pivot',
                          'front_left_wheel_pivot','front_right_wheel_pivot',
@@ -2648,7 +2648,8 @@ def build_offroader(b):
                          'tailgate_hinge_pivot'],
         'pivot_notes': 'Road wheels: local Y; front steering and doors/tailgate: local Z; hood and cabin levers/pedals: local Y; tilted cabin steering wheel: local X. Hood and left doors open with negative rotation; right doors and tailgate with positive rotation. Limits are on each control pivot. No animation clips or vehicle physics.',
         'notes': ['The body-shape pass adds gently crowned door skins, 35 mm extra upper-cabin taper per side, rounded glazing corners, broad hood shoulders, a thin crowned roof, slim rack mounts and wrapped bumper wings.',
-                  'A sculpted center console and central padded armrest complement softer seat edges and tapered headrests; the original wheelbase and all 19 control pivots are retained.',
+                  'The 17 percent larger optical assemblies sit in enlarged apertures beside a narrower curved grille. Slender window frames, mirror mounts and tapered flare ends refine the proportions.' ,
+                  'Sculpted door cards, stitched seat inserts, aligned driver seating and a fixed footrest complement the console and padded armrest; the original wheelbase and all 19 controls are retained.',
                   'A modeled inline-four engine bay includes cooling, intake, belt drive, battery, fluids and wiring; pistons and mechanical simulation are not included.',
                   'Manual six-speed cabin includes three pedals, separate transfer lever, handbrake, labeled instruments, route display and upholstered seats.',
                   'Window transmission uses KHR_materials_transmission; verify support in the target-engine importer.',
@@ -2692,8 +2693,8 @@ def build_offroader_body(b, m):
         body_side=panel(side_name+'_body_side',[(x,side*.84,z) for x,z in side_shape],(0,.032,0),paint,bevel=.003)
         # Rolled continuous flare profile: no broad flat horizontal shelf.
         for axle,label in ((1.32,'front'),(-1.32,'rear')):
-            controls=[(.534,.842),(.538,.915),(.546,.993),(.556,1.047),
-                      (.566,1.063),(.579,1.055),(.591,1.010),(.598,.930),(.600,.842)]
+            controls=[(.522,.842),(.526,.915),(.534,.993),(.544,1.047),
+                      (.554,1.063),(.567,1.055),(.579,1.010),(.586,.930),(.588,.842)]
             profile=[]
             for j in range(len(controls)-1):
                 a=Vector(controls[max(0,j-1)]);c=Vector(controls[j]);d=Vector(controls[j+1]);e=Vector(controls[min(j+2,len(controls)-1)])
@@ -2706,7 +2707,9 @@ def build_offroader_body(b, m):
             steps=64
             for i in range(steps+1):
                 a=math.pi*i/steps
-                verts.extend((axle+r*math.cos(a),side*y,.43+r*math.sin(a)) for r,y in profile)
+                flare_width=.80+.20*math.sin(a)**.7
+                verts.extend((axle+r*math.cos(a),side*(.842+(y-.842)*flare_width),
+                              .43+r*math.sin(a)) for r,y in profile)
             count=len(profile)
             faces=[(i*count+j,i*count+(j+1)%count,(i+1)*count+(j+1)%count,(i+1)*count+j)
                    for i in range(steps) for j in range(count)]
@@ -2714,7 +2717,8 @@ def build_offroader_body(b, m):
             b.mesh(side_name+'_'+label+'_fender_flare',verts,faces,trim,smooth=True,bevel=.003)
             for i in range(7):
                 a=math.pi*(i+.5)/7
-                pos=(axle+.566*math.cos(a),side*1.068,.43+.566*math.sin(a))
+                pos=(axle+.554*math.cos(a),side*(.842+.221*(.80+.20*math.sin(a)**.7)+.005),
+                     .43+.554*math.sin(a))
                 b.cylinder(side_name+'_'+label+'_flare_fastener',
                            (pos[0],pos[1]-side*.004,pos[2]),
                            (pos[0],pos[1]+side*.004,pos[2]),.006,m['alloy'],vertices=8)
@@ -2733,9 +2737,9 @@ def build_offroader_body(b, m):
         quarter_window=offroader_rounded_outline([(-1.595,1.495),(-1.595,1.975),(-1.869,1.975),(-1.898,1.495)],.022)
         offroader_access_glass(b,m,side_name+'_quarter_glass',side_outline(quarter_window,side),(0,.006,0))
         trim_path(side_name+'_quarter_window_seal',side_outline(quarter_window+quarter_window[:1],side,.004),.007,m['rubber'])
-        pillars=[((.62,1.43),(.32,2.03),.145,.069),
-                 ((-.58,1.43),(-.58,2.03),.098,.092),
-                 ((-1.53,1.43),(-1.53,2.03),.094,.088),
+        pillars=[((.62,1.43),(.32,2.03),.135,.061),
+                 ((-.58,1.43),(-.58,2.03),.086,.080),
+                 ((-1.53,1.43),(-1.53,2.03),.084,.078),
                  ((-1.96,1.43),(-1.94,2.03),.120,.125)]
         for index,(lower_point,upper_point,lower_width,upper_width) in enumerate(pillars):
             lx,lz=lower_point; ux,uz=upper_point
@@ -2752,9 +2756,10 @@ def build_offroader_body(b, m):
 
         # Mirrors face aft toward the driver, with an independent dark housing.
         before_mirror=len(b.objects)
-        b.tube(side_name+'_mirror_arm',[(.48,side*.84,1.58),(.42,side*.96,1.60),(.37,side*1.04,1.65)],.023,trim)
-        b.box(side_name+'_mirror_housing',(.36,side*1.075,1.655),(.14,.15,.19),trim,bevel=.035)
-        b.box(side_name+'_mirror_glass',(.282,side*1.075,1.655),(.010,.119,.15),m['chrome'],bevel=.015)
+        b.box(side_name+'_mirror_mount',(.48,side*.843,1.58),(.045,.019,.055),trim,bevel=.009)
+        b.tube(side_name+'_mirror_arm',[(.48,side*.85,1.58),(.42,side*.97,1.60),(.37,side*1.04,1.65)],.016,trim)
+        b.box(side_name+'_mirror_housing',(.36,side*1.075,1.655),(.115,.15,.19),trim,bevel=.035)
+        b.box(side_name+'_mirror_glass',(.298,side*1.075,1.655),(.006,.119,.15),m['chrome'],bevel=.015)
         for obj in b.objects[before_mirror:]:
             obj['access_role']='front_'+side_name+'_door_hinge_pivot'
         b.box(side_name+'_side_indicator',(.77,side*.865,1.23),(.12,.018,.038),m['amber'],bevel=.009)
@@ -2772,9 +2777,9 @@ def build_offroader_body(b, m):
     windshield=offroader_rounded_outline([(.601,-.775,1.485),(.601,.775,1.485),(.343,.707,1.992),(.343,-.707,1.992)],.032)
     # 7.6 mm laminated windshield thickness follows its actual sloped normal.
     offroader_access_glass(b,m,'windshield',windshield,(-.006773,0,-.003446))
-    trim_path('windshield_seal',windshield+[windshield[0]],.011,m['rubber'])
-    b.box('windshield_lower_frame',(.62,0,1.44),(.050,1.64,.055),paint,bevel=.007)
-    b.box('windshield_upper_frame',(.32,0,2.03),(.048,1.51,.060),paint,bevel=.007)
+    trim_path('windshield_seal',windshield+[windshield[0]],.008,m['rubber'])
+    b.box('windshield_lower_frame',(.62,0,1.44),(.045,1.64,.047),paint,bevel=.007)
+    b.box('windshield_upper_frame',(.32,0,2.03),(.043,1.51,.050),paint,bevel=.007)
     for y in (-.38,.36):
         b.tube('windscreen_wiper_arm',[(.622,y,1.48),(.53,y-.10,1.65),(.455,y-.15,1.79)],.009,steel)
         b.tube('windscreen_wiper_blade',[(.448,y-.35,1.80),(.448,y-.15,1.80),(.448,y+.07,1.80)],.012,trim)
@@ -2785,7 +2790,7 @@ def build_offroader_body(b, m):
     # Original wide horizontal grille rather than a brand-specific pattern.
     build_offroader_front(b, m)
     for side in (-1,1):
-        b.box('front_signal',(2.100,side*.67,.995),(.025,.19,.042),m['amber'],bevel=.008)
+        b.box('front_signal',(2.085,side*.636,.995),(.018,.17,.039),m['amber'],bevel=.008)
         b.box('rear_light_housing',(-2.015,side*.704,1.191),(.065,.177,.36),trim,bevel=.020)
         for z,material in ((1.30,m['red']),(1.205,m['red']),(1.115,m['amber']),(1.055,m['lamp'])):
             b.box('rear_light_lens',(-2.056,side*.704,z),(.016,.137,.055),material,bevel=.012)
@@ -2807,7 +2812,7 @@ def build_offroader_body(b, m):
 
 def offroader_upholstery_texture(b, material):
     """Bake textile weave, depressed seams and restrained creases into one normal map."""
-    n=b.texture_size
+    n=max(1024,b.texture_size)
     yy,xx=np.mgrid[:n,:n]; u=(xx+.5)/n; v=(yy+.5)/n
     height=.000018*np.sin(xx*math.pi/2)*np.sin(yy*math.pi/2)
     edge=(np.exp(-((u-.08)/.09)**2)+np.exp(-((u-.92)/.09)**2))
@@ -2820,15 +2825,28 @@ def offroader_upholstery_texture(b, material):
             height+=.00011*np.exp(-((v-seam-offset)/.0025)**2)*dots*inside
     for seam in (.045,.955):
         height-=.00050*np.exp(-((u-seam)/.008)**2)
+        # Approximately 3 mm stitch pitch along the panel edge, with two
+        # distinct threads beside the seam instead of a continuous raised line.
+        thread=np.exp(-(np.sin(v*math.tau*70)/.48)**2)
+        for offset in (-.010,.010):
+            height+=.00012*np.exp(-((u-seam-offset)/.0028)**2)*thread
     dv,du=np.gradient(height,.43/n,.30/n)
     normals=np.stack((-du,-dv,np.ones_like(u)),axis=-1)
     normals/=np.linalg.norm(normals,axis=-1,keepdims=True)
     pixels=np.ones((n,n,4),dtype=np.float32); pixels[:,:,:3]=normals*.5+.5
+    orm=np.ones_like(pixels)
+    orm[:,:,1]=.79+.018*np.sin(u*math.tau*40)*np.sin(v*math.tau*58)
+    orm[:,:,2]=0.
     for node in material.node_tree.nodes:
-        if node.type=='TEX_IMAGE' and node.image and node.image.name.endswith('_normal'):
-            node.image.pixels.foreach_set(pixels.ravel()); node.image.pack()
+        if node.type=='TEX_IMAGE' and node.image:
+            values=pixels if node.image.name.endswith('_normal') else orm
+            image=bpy.data.images.new(node.image.name+'_stitched',n,n,alpha=True)
+            image.colorspace_settings.name='Non-Color'
+            image.pixels.foreach_set(values.ravel()); image.pack(); node.image=image
         if node.type=='NORMAL_MAP':
             node.inputs['Strength'].default_value=1.
+    material['upholstery_atlas_pixels']=n
+    material['stitch_pitch_m']=.43/140
 
 
 def offroader_sidewall_material(b):
@@ -3084,7 +3102,9 @@ def offroader_pad(b, name, location, size, material, rotation=None):
 
 def build_offroader_hood(b, m):
     """Pressed hood with rounded plan corners, continuous shoulders and a thin hem."""
-    hinge=offroader_control(b,'hood_hinge_pivot',(.635,0,1.423),-72,0)
+    # An external axis just above the rear pressing lifts the hem away from
+    # the cowl when opening; a buried axis would swing it into the windscreen.
+    hinge=offroader_control(b,'hood_hinge_pivot',(.636,0,1.505),-72,0)
     rear,front,half_width,corner=.649,2.048,.819,.050
     # Resolve the last 50 mm as an actual quarter-circle in plan. Dense corner
     # rows retain a curved silhouette instead of a chamfer at the two front tips.
@@ -3097,10 +3117,10 @@ def build_offroader_hood(b, m):
     def skin(x,y):
         u=max(0.,min(1.,(x-rear)/(front-rear)))
         t=max(-1.,min(1.,y/section_width(x)))
-        # Similar overall crown height to the previous hood, with broader,
-        # continuously blended shoulders and a gentler leading-edge fall.
-        crown=(.021+.010*u)*max(0.,1-t*t)**1.1
-        shoulder=.009*math.sin(math.pi*u)*math.exp(-(abs(t)/.68)**6)
+        # A broad centre pressing rolls into distinct shoulders. The 22 mm
+        # stronger crown gives the long front clip a readable stamped section.
+        crown=(.043+.006*u)*max(0.,1-t**4)**1.25
+        shoulder=.004*math.sin(math.pi*u)*math.exp(-(abs(t)/.68)**6)
         top=1.448-.025*u+crown+shoulder
         distance=min(u,1-u,(1-abs(t))*.5)
         thickness=.003+.008*math.exp(-(distance/.035)**2)
@@ -3137,10 +3157,12 @@ def build_offroader_hood(b, m):
         rib=b.tube('hood_inner_pressing',[(x,y,skin(x,y)[1]-.011) for x,y in points],
                    .013,m['paint'],resolution=1)
         b.parent(rib,hinge)
-        b.cylinder('hood_hinge_fixed_pin',(.636,side*.48-.035,1.423),(.636,side*.48+.035,1.423),.013,m['steel'],vertices=16)
+        b.box('hood_hinge_fixed_pedestal',(.623,side*.48,1.482),(.023,.078,.058),
+              m['steel'],bevel=.004)
+        b.cylinder('hood_hinge_fixed_pin',(.636,side*.48-.035,1.505),(.636,side*.48+.035,1.505),.013,m['steel'],vertices=16)
         leaf_z=skin(.706,side*.48)[1]-.005
         b.parent(b.box('hood_hinge_leaf',(.706,side*.48,leaf_z),(.13,.060,.008),m['steel'],bevel=.003),hinge)
-        b.parent(b.cylinder('hood_hinge_offset_arm',(.636,side*.48,1.423),
+        b.parent(b.cylinder('hood_hinge_offset_arm',(.636,side*.48,1.505),
                            (.685,side*.48,leaf_z-.004),.013,m['steel'],vertices=12),hinge)
         for x in (.69,.74):
             z=skin(x,side*.48)[1]
@@ -3196,8 +3218,14 @@ def build_offroader_front(b, m):
         vertices=[]
         for y in ys:
             front=fascia_x(y,z)
-            vertices.extend(((front-depth,y,z-height*.5),(front,y,z-height*.5),
-                             (front,y,z+height*.5),(front-depth,y,z+height*.5)))
+            lower,upper=z-height*.5,z+height*.5
+            if name=='front_panel_crossrail' and z>1.3:
+                # Close the raised hood nose with matching stamped metal.
+                # The 11 mm folded hem retains a 6 mm opening shut line.
+                t=min(abs(y)/.769,1.)
+                upper=1.423+.049*max(0.,1-t**4)**1.25-.017
+            vertices.extend(((front-depth,y,lower),(front,y,lower),
+                             (front,y,upper),(front-depth,y,upper)))
         faces=[(3,2,1,0),tuple((len(ys)-1)*4+j for j in range(4))]
         faces += [(i*4+j,(i+1)*4+j,(i+1)*4+(j+1)%4,i*4+(j+1)%4)
                   for i in range(len(ys)-1) for j in range(4)]
@@ -3207,19 +3235,19 @@ def build_offroader_front(b, m):
     for side in (-1,1):
         # A stamped annulus around an actual aperture, not a solid plate
         # behind a lamp pasted onto its face.
-        cy,cz=side*.656,1.209
+        cy,cz=side*.636,1.209
         count=64; vertices=[]
         for x,inside in ((2.074,False),(2.074,True),(2.005,False),(2.005,True)):
             for i in range(count):
                 a=math.tau*i/count; c,s=math.cos(a),math.sin(a)
                 if inside:
-                    radius=.115
+                    radius=.115*1.17
                 else:
                     # Rounded rectangular blank around the circular lamp hole.
-                    low,high=0.,math.hypot(.162,.193)
+                    low,high=0.,math.hypot(.182,.193)
                     for _ in range(20):
                         radius=(low+high)*.5
-                        qy=max(abs(radius*c)-.140,0.)
+                        qy=max(abs(radius*c)-.160,0.)
                         qz=max(abs(radius*s)-.171,0.)
                         if math.hypot(qy,qz) <= .022:
                             low=radius
@@ -3235,21 +3263,29 @@ def build_offroader_front(b, m):
             faces.extend([(i,j,count+j,count+i),(2*count+i,3*count+i,3*count+j,2*count+j),
                           (i,2*count+i,2*count+j,j),(count+i,count+j,3*count+j,3*count+i)])
         b.mesh('stamped_headlamp_surround',vertices,faces,m['paint'],smooth=True,bevel=.003)
-        curved_rail('signal_surround',cy,.162,.997,.065,.066,m['paint'])
-        b.box('grille_side_return',(2.035,side*.480,1.185),(.11,.048,.39),m['trim'],bevel=.012)
+        curved_rail('signal_surround',cy,.182,.997,.065,.066,m['paint'])
+        b.box('grille_side_return',(2.035,side*.454,1.185),(.11,.040,.39),m['trim'],bevel=.012)
     for z in (1.006,1.361):
-        b.box('grille_border',(2.073,0,z),(.050,.985,.028),m['trim'],bevel=.008)
+        b.box('grille_border',(2.073,0,z),(.050,.935,.024),m['trim'],bevel=.008)
     for z in (1.074,1.181,1.288):
-        b.box('grille_aero_slat',(2.095,0,z),(.060,.91,.025),m['steel'],bevel=.009,rotation=(0,-.18,0))
+        # Mild convex plan curvature catches a continuous reflection.
+        rings=[]
+        for j in range(17):
+            y=-.432+.864*j/16
+            x=2.081+.014*(1-(y/.432)**2)
+            rings.append([(x+dx,y,z+dz) for dx,dz in
+                          ((-.030,-.010),(.022,-.010),(.030,-.004),
+                           (.030,.004),(.022,.010),(-.030,.010))])
+        offroader4_closed_rings(b,'grille_aero_slat',rings,m['steel'])
     # Fine expanded-mesh backing is separated from the radiator behind it.
-    for y in [i*.055 for i in range(-8,9)]:
+    for y in [i*.052 for i in range(-8,9)]:
         obj=b.cylinder('grille_mesh_vertical',(2.014,y,1.025),(2.014,y,1.342),.0025,m['steel'],vertices=6)
         obj['max_lod']=1
     for z in (1.044,1.10,1.156,1.212,1.268,1.324):
-        obj=b.cylinder('grille_mesh_horizontal',(2.014,-.44,z),(2.014,.44,z),.0025,m['steel'],vertices=6)
+        obj=b.cylinder('grille_mesh_horizontal',(2.014,-.416,z),(2.014,.416,z),.0025,m['steel'],vertices=6)
         obj['max_lod']=1
     for side in (-1,1):
-        cy,cz=side*.656,1.209
+        cy,cz=side*.636,1.209
         lamp_start=len(b.objects)
         b.box('headlamp_recess',(2.065,cy,cz),(.025,.240,.240),m['trim'],bevel=.028)
         profile=[(2.089,.021),(2.094,.038),(2.108,.065),(2.127,.090),(2.139,.102)]
@@ -3265,8 +3301,12 @@ def build_offroader_front(b, m):
         b.torus('headlamp_outer_gasket',(2.144,cy,cz),.110,.006,m['rubber'],axis='X',major_segments=64,minor_segments=8)
         b.sphere('headlamp_outer_cover',(2.155,cy,cz),(.010,.107,.107),m['optic'],segments=48,rings=16)
         for obj in b.objects[lamp_start:]:
+            # Scale the optical assembly around its physical axis, including
+            # transformed toruses/cylinders, while retaining recessed depth.
+            transform=Matrix.Translation((0,cy,cz)) @ Matrix.Diagonal((1.,1.17,1.17,1.)) @ Matrix.Translation((0,-cy,-cz))
+            obj.matrix_basis=transform @ obj.matrix_basis
             obj.location.x-=.070
-        for dy,dz in ((-.127,.12),(.127,-.12)):
+        for dy,dz in ((-.151,.14),(.151,-.14)):
             obj=b.cylinder('headlamp_retainer',(2.076,cy+dy,cz+dz),(2.081,cy+dy,cz+dz),.005,m['alloy'],vertices=6)
             obj['max_lod']=0
 
@@ -3913,7 +3953,7 @@ def build_offroader_cockpit(b, m):
         for i in range(3):
             offroader_pad(b,'shifter_boot_pleat',(x,y,1.15+i*.013),(.11-i*.023,.082-i*.018,.024),rubber)
         b.parent(b.cylinder('gear_lever_shaft',(x,y,1.166),(x-.025,y,1.16+length),.007,alloy,vertices=16),pivot)
-        knob=offroader_pad(b,'shift_knob',(x-.025,y,1.17+length),(.053,.049,.054),m['trim'])
+        knob=offroader4_soft_pad(b,'shift_knob',(x-.025,y,1.17+length),(.049,.045,.054),m['trim'],headrest=True)
         b.parent(knob,pivot)
         offroader_text(b,'shift_pattern','R 1 3 5\n  2 4 6' if length>.15 else 'H N L',
                        (x-.025,y,1.198+length),.009,m['stitch'],parent=pivot,facing='top')
@@ -3935,6 +3975,10 @@ def build_offroader_cockpit(b, m):
             rib=b.box('pedal_grip_rib',(.398-(z-.89)*.20,y,z),(.003,width*.78,.003),m['trim'],bevel=.001)
             rib['max_lod']=0
             b.parent(rib,pivot)
+    b.box('driver_dead_pedal',(.439,.684,.888),(.027,.048,.142),m['interior'],
+          bevel=.008,rotation=(0,-.20,0))
+    for z in (.845,.870,.895,.920,.945):
+        b.box('dead_pedal_grip',(.421-(z-.888)*.20,.684,z),(.004,.036,.004),rubber,bevel=.001)['max_lod']=0
 
 
 def build_offroader_interior(b, m):
@@ -4002,7 +4046,7 @@ def build_offroader_interior(b, m):
     # A single sewn shell forms each cushion/backrest, including its bolsters.
     # Flush cloth regions carry the refined normal map on their authored UVs.
     for side, label in ((1,'driver'),(-1,'passenger')):
-        y=side*.40
+        y=side*.42
         for rail_y in (y-.16,y+.16):
             b.box(label+'_seat_rail',(-.18,rail_y,.82),(.46,.032,.035),steel,bevel=.007)
             b.box(label+'_seat_pedestal',(-.20,rail_y,.90),(.25,.045,.14),plastic,bevel=.018)
@@ -4016,8 +4060,8 @@ def build_offroader_interior(b, m):
             b.cylinder(label+'_headrest_post',(-.472,y+offset,1.619),(-.482,y+offset,1.715),.007,alloy,vertices=12)
             b.box(label+'_headrest_post_guide',(-.472,y+offset,1.649),(.030,.028,.012),plastic,bevel=.005)
         offroader4_soft_pad(b,label+'_headrest',(-.480,y,1.733),(.134,.275,.172),m['leather'],headrest=True,rotation=(0,-.11,0))
-        b.cylinder(label+'_seat_recline_hinge',(-.375,side*.618,1.008),(-.375,side*.644,1.008),.045,plastic,vertices=24)
-        b.cylinder(label+'_seat_adjustment',(-.22,side*.638,.967),(-.22,side*.659,.967),.029,plastic,vertices=24)
+        b.cylinder(label+'_seat_recline_hinge',(-.375,side*.638,1.008),(-.375,side*.664,1.008),.045,plastic,vertices=24)
+        b.cylinder(label+'_seat_adjustment',(-.22,side*.658,.967),(-.22,side*.679,.967),.029,plastic,vertices=24)
         b.tube(label+'_seat_slide_handle',[(-.015,y-.13,.921),(.055,y-.13,.935),
                                         (.055,y+.13,.935),(-.015,y+.13,.921)],.006,steel,resolution=1)
         # Retracted unoccupied belts hang at the B pillar, outside the seats.
@@ -4060,15 +4104,25 @@ def build_offroader_interior(b, m):
             moving_start=len(b.objects)
             rear=x<-.5
             role=('rear_' if rear else 'front_')+('left_' if side>0 else 'right_')+'door_hinge_pivot'
-            b.box('inner_door_card',(x,side*.785,1.202 if rear else 1.12),
-                  (.69,.023,.284 if rear else .37),plastic,bevel=.025)
+            zc=1.202 if rear else 1.12
+            height=.284 if rear else .37
+            outline=offroader_rounded_outline([
+                (x-.345,zc-height*.43),(x-.30,zc-height*.50),
+                (x+.25,zc-height*.50),(x+.345,zc-height*.25),
+                (x+.345,zc+height*.33),(x+.27,zc+height*.50),
+                (x-.28,zc+height*.50),(x-.345,zc+height*.31)],.022)
+            rings=[]
+            for inset,depth in ((.007,.014),(0.,.006),(.004,-.008),(.012,-.017)):
+                border=offroader_inset_outline(outline,inset)
+                rings.append([(px,side*(.785+depth),pz) for px,pz in border])
+            offroader4_closed_rings(b,'inner_door_card',rings,plastic)
             offroader4_soft_pad(b,'door_armrest',(x-.04,side*.753,1.24),(.40,.080,.064),m['leather'])
             b.box('door_pull_recess',(x+.17,side*.758,1.315),(.11,.027,.050),m['trim'],bevel=.012)
             b.box('interior_door_handle',(x+.17,side*.739,1.315),(.075,.015,.017),alloy,bevel=.006)
             b.box('door_storage_pocket',(x-.02,side*.752,1.105 if rear else .965),
                   (.45,.070,.080 if rear else .12),plastic,bevel=.018 if rear else .024)
-            offroader_pad(b,'door_padded_insert',(x-.01,side*.767,1.173 if rear else 1.135),
-                          (.50,.030,.13 if rear else .18),m['leather'])
+            offroader4_soft_pad(b,'door_padded_insert',(x-.01,side*.761,1.173 if rear else 1.135),
+                          (.50,.027,.13 if rear else .18),m['leather'])
             b.tube('door_stitch',[(x-.23,side*.744,1.202),(x,side*.744,1.206),(x+.20,side*.744,1.202)],.0013,m['stitch'])['max_lod']=1
             b.box('window_switch_mount',(x+.07,side*.733,1.281),(.13,.049,.016),m['trim'],bevel=.005)
             for sx in (x+.04,x+.095):

@@ -65,6 +65,8 @@ Leicht gewölbte Türflächen, eine nach oben verjüngte Kabine, weichere Hauben
 
 Der Innenraum enthält zwei konturierte Vordersitze und eine durchgehende Rückbank mit Oberschenkelauflage, Sitzmulden und Lendenkontur. Sitzkissen und Lehnen bestehen jeweils aus einer geschlossenen Polsterform mit bündigen Stoff- und Lederbereichen. Die Mittelkonsole besitzt eine längs und quer geformte Kontur mit einer zentralen gepolsterten Armlehne; Kopfstützen und Sitzkanten sind weicher geformt. Das Armaturenbrett besitzt gerundete Übergänge, eine gewölbte Instrumentenhaube, einen vertieften Bildschirm und eingefasste Bedienelemente. Beschriftete Instrumente, eine statische Navigationsanzeige, Klimaregler, Luftausströmer, Gurte und Türlautsprecher ergänzen die Ausstattung. Lenkrad, Gang- und Verteilergetriebehebel, Handbremse, Gas, Bremse und Kupplung haben getrennte Drehpunkte; die Sechsgangbeschriftung enthält auch den Rückwärtsgang. Federung und Schaltmanschetten bleiben statisch; Fahrphysik, Türsteuerung und interaktive Anzeigen müssen in der Engine eingerichtet werden. Die Kabinenscheiben besitzen modellierte Stärke und dezent grüne Glaskanten. Scheiben/Linsen verwenden `KHR_materials_transmission`, der Lack `KHR_materials_clearcoat`; die Ziel-Engine muss diese Materialerweiterungen unterstützen. [Details, fünf Ansichten und Bedienachsen](docs/offroader.md).
 
+Die aktuelle Detailüberarbeitung vergrößert die vertieften Scheinwerfer um 17 %, verengt den Grill und wölbt seine Lamellen. Deutlichere Haubenschultern, schlankere Fensterrahmen und Spiegelhalter sowie eingezogene Radlaufenden stimmen die Außenform ab. Konturierte Türverkleidungen, feinere Polsternähte, ausgerichtete Vordersitze und eine feste linke Fußstütze ergänzen die Kabine. Ein zusätzlicher Passungstest prüft Haubenbewegung, Scharnieraufnahmen und ausgewählte Bedienelemente.
+
 Eigene Oberflächenmaps unterscheiden beim Geländewagen Lack, geformten Kunststoff, Leder, Stoff, Gummi und Metall. Feine Bremsscheibenriefen, zurückhaltende Anlassfarben am Auspuff, etwas Schmutz am Unterboden und geglättete Kontaktstellen an Griffen und Trittflächen sind als Texturen beziehungsweise Vertexfarben angelegt. Beleuchtung und Reflexionen werden weiterhin vom Renderer berechnet.
 
 Das Motorboot enthält einen geformten tiefen V-Rumpf, Deck und Cockpitboden, Bugpolster, Einzelsitze und Heckbank, einen Steuerstand mit Instrumenten sowie Reling und Beschläge. Die geteilte Windschutzscheibe verwendet ebenfalls `KHR_materials_transmission`. Der Außenborder besitzt eine Motorhaube, Unterwasserteil und profilierten Propeller. Vier Drehpunkte trennen Motortrimmung, Außenborderlenkung, Propeller und Lenkrad. Die Geometrie ist keine geprüfte Schiffskonstruktion und enthält keine Auftriebs-, Wellen- oder Antriebssimulation.
@@ -106,7 +108,7 @@ Die mit Blender 4.3.2 erzeugten Standardmodelle haben folgende Dreieckszahlen:
 | Enduro | 142.576 | 70.568 | 32.030 | 4 Boxen |
 | Helikopter | 85.220 | 41.216 | 17.673 | 6 Boxen |
 | Flugzeug | 97.120 | 47.464 | 20.825 | 8 Boxen |
-| Geländewagen | 327.753 | 159.372 | 72.623 | 10 Boxen |
+| Geländewagen | 332.589 | 161.435 | 73.489 | 10 Boxen |
 | Motorboot | 72.374 | 35.564 | 16.088 | 8 Boxen |
 
 Andere Blender-Versionen können bei automatischer Vereinfachung und UV-Erstellung abweichende Ergebnisse liefern. Die aktuellen Zahlen stehen immer in den erzeugten Manifesten.
