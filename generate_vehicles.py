@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Original procedural enduro, helicopter and touring airplane for Blender 4.3+.
+"""Original procedural enduro, helicopter, airplane and 4x4 for Blender 4.3+.
 
 Run with Python (launches Blender), or:
 blender --background --factory-startup --python generate_vehicles.py -- --asset all --render
@@ -449,7 +449,8 @@ def sha256(path):
 
 
 def asset_builders():
-    return {"enduro": build_enduro, "helicopter": build_helicopter, "airplane": build_airplane}
+    return {"enduro": build_enduro, "helicopter": build_helicopter,
+            "airplane": build_airplane, "offroader": build_offroader}
 
 
 def generate_asset(name, options):
@@ -505,7 +506,7 @@ def generate_asset(name, options):
         "generator_sha256": GENERATOR_SHA256,
         "blender_version": bpy.app.version_string, "seed": options.seed,
         "license": "MIT", "provenance": "Original procedural geometry and generated micro-surface textures; no external model or image sources.",
-        "request": "Enduro-Motorrad, Helikopter und Flugzeug als detaillierte Python-generierte Grundlage fuer spaetere AAA-Spiele.",
+        "request": "Enduro-Motorrad, Helikopter, Flugzeug und 4x4-Gelaendewagen als detaillierte Python-generierte Grundlage fuer spaetere AAA-Spiele.",
         "design_exclusions": "No logos, third-party meshes, paid generation or claim of engine certification.",
         "units": "metres", "source_axes": {"forward":"+X","left":"+Y","up":"+Z"},
         "glb_axes": {"forward":"+X","left":"-Z","up":"+Y"},
@@ -527,9 +528,9 @@ def generate_asset(name, options):
 
 def main():
     builders = asset_builders()
-    parser = argparse.ArgumentParser(prog="generate_vehicles.py", description="Blender: Enduro, Helikopter und Flugzeug in Metern generieren, mit PBR, UVs und LODs.")
+    parser = argparse.ArgumentParser(prog="generate_vehicles.py", description="Blender: Enduro, Helikopter, Flugzeug und 4x4 in Metern generieren, mit PBR, UVs und LODs.")
     parser.add_argument("--asset", choices=("all", "both", *builders), default="all",
-                        help="all: alle drei Modelle (Standard); both: Enduro und Helikopter wie bisher")
+                        help="all: alle Modelle (Standard); both: Enduro und Helikopter wie bisher")
     parser.add_argument("--output", type=Path, default=Path("generated"))
     parser.add_argument("--lods", type=int, choices=(1,2,3), default=3, help="Anzahl Detailstufen (LOD0 bis LOD2)")
     parser.add_argument("--texture-size", type=int, choices=(128,256,512,1024), default=256)
@@ -1568,6 +1569,660 @@ def build_airplane(b):
                  'Airfoils are visual NACA-inspired approximations, not aerodynamic certification.',
                  'Eight static collision boxes exclude the propeller sweep and require target-engine tuning.',
                  'Control surfaces are independent closed meshes with geometric hinge gaps; low LODs need visual review.']
+    }
+
+
+def build_offroader(b):
+    """Original expedition 4x4 with a hollow cabin and articulated road wheels."""
+    m = {
+        'paint': b.mat('offroader_sage_paint', (.135,.205,.155), metallic=.33, roughness=.33),
+        'roof': b.mat('offroader_sand_roof', (.65,.61,.48), metallic=.18, roughness=.36),
+        'trim': b.mat('offroader_graphite_trim', (.018,.024,.027), roughness=.46),
+        'rubber': b.mat('offroader_tire_rubber', (.012,.016,.018), roughness=.85),
+        'tread': b.mat('offroader_tread_rubber', (.022,.027,.029), roughness=.90),
+        'alloy': b.mat('offroader_satin_alloy', (.43,.48,.51), metallic=.90, roughness=.31),
+        'steel': b.mat('offroader_dark_steel', (.065,.083,.090), metallic=.82, roughness=.38),
+        'chrome': b.mat('offroader_polished_metal', (.62,.68,.71), metallic=1., roughness=.19),
+        'bronze': b.mat('offroader_bronze_wheels', (.30,.23,.13), metallic=.86, roughness=.30),
+        'glass': b.mat('offroader_smoked_glass', (.78,.86,.90), roughness=.035, transmission=1.),
+        'red': b.mat('offroader_red_lens', (.50,.008,.005), roughness=.23, emission=(.55,.008,.004)),
+        'amber': b.mat('offroader_amber_lens', (.90,.20,.012), roughness=.23, emission=(.70,.10,.003)),
+        'lamp': b.mat('offroader_led_lens', (.70,.82,.90), roughness=.16, emission=(.48,.61,.74)),
+        'fabric': b.mat('offroader_woven_seat', (.055,.063,.058), roughness=.89),
+        'interior': b.mat('offroader_cabin_polymer', (.030,.038,.039), roughness=.63),
+        'display': b.mat('offroader_instrument_display', (.009,.026,.037), roughness=.25),
+    }
+    build_offroader_body(b, m)
+    build_offroader_chassis(b, m)
+    build_offroader_interior(b, m)
+
+    # Broad, separate collision proxies are deliberately independent of the rig.
+    b.collision_box('body', (0,0,1.00), (3.90,1.62,.62))
+    b.collision_box('cabin', (-.77,0,1.70), (2.30,1.48,.65))
+    b.collision_box('front_bumper', (2.20,0,.775), (.35,1.98,.47))
+    b.collision_box('rear_bumper', (-2.15,0,.69), (.35,1.98,.28))
+    for axle, x in (('front',1.32),('rear',-1.32)):
+        for side, y in (('left',.92),('right',-.92)):
+            b.collision_box(axle+'_'+side+'_wheel', (x,y,.43), (.86,.28,.86))
+    b.collision_box('rear_spare', (-2.16,0,1.22), (.30,.86,.86))
+    b.collision_box('roof_rack', (-.80,0,2.17), (2.15,1.65,.22))
+    return {
+        'description': 'Original four-door expedition 4x4 with open wheel arches, terrain tires, rear spare, ladder frame, axles, driveline, cabin, winch and roof rack.',
+        'dimensions_design_m': {'wheelbase': 2.64, 'track': 1.84, 'tire_diameter': .86},
+        'moving_parts': ['front_left_steering_pivot','front_right_steering_pivot',
+                         'front_left_wheel_pivot','front_right_wheel_pivot',
+                         'rear_left_wheel_pivot','rear_right_wheel_pivot'],
+        'pivot_notes': 'Road wheels rotate about local Y. Each front wheel is parented to its own local-Z steering pivot. Front brake calipers follow steering; discs follow wheel rotation. No steering angles or axle physics are computed.',
+        'notes': ['The cabin contains modeled seats, dashboard, steering wheel, console and belts; it is not a finished first-person cockpit.',
+                  'Window transmission uses KHR_materials_transmission; verify support in the target-engine importer.',
+                  'Four-wheel drive is represented by mechanical geometry, not a vehicle-physics simulation.',
+                  'Doors, cabin steering wheel and suspension are static; no animation clips or suspension rig are provided.',
+                  'Ten static collision boxes need engine tuning and do not follow the wheel pivots.'],
+    }
+
+def build_offroader_body(b, m):
+    """Hollow, original expedition-wagon body with real wheel openings."""
+    paint, trim, steel = m['paint'], m['trim'], m['steel']
+
+    def trim_path(name, points, radius, material):
+        # Polygonal panel edges must not inherit AUTO handles that overshoot
+        # window corners and can push the rubber seals through the roof.
+        obj = b.tube(name, points, radius, material)
+        for spline in obj.data.splines:
+            for point in spline.bezier_points:
+                point.handle_left_type = point.handle_right_type = 'VECTOR'
+        return obj
+
+    def panel(name, outline, offset, material, bevel=0):
+        # Closed thin panel, including concave silhouettes such as wheel arches.
+        n = len(outline)
+        delta = Vector(offset) * .5
+        vertices = [tuple(Vector(p)-delta) for p in outline]
+        vertices += [tuple(Vector(p)+delta) for p in outline]
+        faces = [tuple(reversed(range(n))), tuple(range(n,2*n))]
+        faces += [(i,(i+1)%n,(i+1)%n+n,i+n) for i in range(n)]
+        return b.mesh(name, vertices, faces, material, bevel=bevel)
+
+    def side_y(z, side, offset=0):
+        return side*(.84-.09*max(0.,min(1.,(z-1.43)/.60))+offset)
+
+    def side_outline(points, side, offset=0):
+        return [(x,side_y(z,side,offset),z) for x,z in points]
+
+    # A concave sheet at each side rises over both wheel wells. Above the
+    # floor there is no cabin-sized solid block to obscure the interior.
+    lower=.68
+    radius=.53
+    start=math.asin((lower-.43)/radius)
+    lower_edge=[(-1.98,lower)]
+    for axle in (-1.32,1.32):
+        lower_edge.extend((axle+radius*math.cos(a),.43+radius*math.sin(a))
+                          for a in [math.pi-start-(math.pi-2*start)*i/24 for i in range(25)])
+    lower_edge.append((2.04,lower))
+    side_shape=[(2.04,1.39),(.62,1.43),(-1.94,1.43),(-1.98,1.38)]+lower_edge
+    for side, side_name in ((1,'left'),(-1,'right')):
+        panel(side_name+'_body_side',[(x,side*.84,z) for x,z in side_shape],(0,.032,0),paint,bevel=.007)
+        # Sculpted six-sided flare cross section sweeps above each tyre.
+        for axle,label in ((1.32,'front'),(-1.32,'rear')):
+            profile=[(.534,.842),(.538,1.015),(.551,1.063),(.586,1.063),(.603,.98),(.600,.842)]
+            verts=[]
+            steps=32
+            for i in range(steps+1):
+                a=math.pi*i/steps
+                verts.extend((axle+r*math.cos(a),side*y,.43+r*math.sin(a)) for r,y in profile)
+            count=len(profile)
+            faces=[(i*count+j,i*count+(j+1)%count,(i+1)*count+(j+1)%count,(i+1)*count+j)
+                   for i in range(steps) for j in range(count)]
+            faces += [tuple(reversed(range(count))),tuple(steps*count+j for j in range(count))]
+            b.mesh(side_name+'_'+label+'_fender_flare',verts,faces,trim,bevel=.004)
+            for i in range(7):
+                a=math.pi*(i+.5)/7
+                pos=(axle+.578*math.cos(a),side*1.070,.43+.578*math.sin(a))
+                b.cylinder(side_name+'_'+label+'_flare_fastener',
+                           (pos[0],pos[1]-side*.004,pos[2]),
+                           (pos[0],pos[1]+side*.004,pos[2]),.006,m['alloy'],vertices=8)
+            # The flap is aft of the tyre envelope and leaves the tread visible.
+            b.box(side_name+'_'+label+'_mud_flap',(axle-.50,side*.94,.37),(.025,.27,.29),m['rubber'],bevel=.007)
+
+        # Actual sill covers and open step rails between the wheel openings.
+        b.box(side_name+'_rock_slider',(-.02,side*.97,.64),(1.49,.12,.10),steel,bevel=.025)
+        b.box(side_name+'_running_board',(-.02,side*1.015,.685),(1.39,.22,.035),trim,bevel=.012)
+        for x in (-.55,.0,.51):
+            b.cylinder(side_name+'_step_mount',(x,side*.70,.64),(x,side*.99,.64),.026,steel,vertices=12)
+        for x in (-.58,-.37,-.16,.05,.26,.47):
+            b.box(side_name+'_step_grip',(x,side*1.03,.706),(.065,.16,.006),m['rubber'],bevel=.002)
+
+        # Side windows: thin closed glass panes within the A/B/C/D pillars.
+        front_window=[(.54,1.49),(.285,1.985),(-.525,1.985),(-.525,1.49)]
+        rear_window=[(-.635,1.49),(-.635,1.985),(-1.475,1.985),(-1.475,1.49)]
+        quarter_window=[(-1.585,1.49),(-1.585,1.985),(-1.875,1.985),(-1.905,1.49)]
+        for label,shape in (('front_door',front_window),('rear_door',rear_window),('quarter',quarter_window)):
+            panel(side_name+'_'+label+'_glass',side_outline(shape,side),(0,.007,0),m['glass'])
+            seal_points=side_outline(shape+[shape[0]],side,.006)
+            trim_path(side_name+'_'+label+'_window_seal',seal_points,.012,m['rubber'])
+        pillars=[((.62,1.43),(.32,2.03),.036),
+                 ((-.58,1.43),(-.58,2.03),.033),
+                 ((-1.53,1.43),(-1.53,2.03),.035),
+                 ((-1.96,1.43),(-1.94,2.03),.038)]
+        for index,(lower_point,upper_point,width) in enumerate(pillars):
+            a=side_outline([lower_point],side)[0]
+            c=side_outline([upper_point],side)[0]
+            b.cylinder(side_name+'_cabin_pillar_'+str(index),a,c,width,paint,vertices=12)
+        b.tube(side_name+'_belt_moulding',[(x,side*.86,1.435) for x in (-1.96,-1.53,-.58,.62)],.016,trim)
+        b.cylinder(side_name+'_window_lower_rail',(.60,side*.837,1.465),(-1.94,side*.837,1.465),.025,paint,vertices=12)
+        b.cylinder(side_name+'_window_header',(.32,side*.755,2.025),(-1.94,side*.755,2.025),.034,paint,vertices=12)
+        b.tube(side_name+'_roof_gutter',[(.40,side*.785,2.065),(-.60,side*.785,2.065),(-1.99,side*.785,2.065)],.015,trim)
+
+        # Dark recess lines follow the front door and the rear wheel intrusion.
+        front_door=[(.58,1.42),(.58,.76),(.51,.705),(-.51,.705),(-.57,.76),(-.57,1.42)]
+        rear_door=[(-.61,1.42),(-.61,.73),(-.83,.73),(-.90,.86),(-1.07,.96),(-1.33,.995),(-1.55,.94),(-1.57,1.42)]
+        for label,points,handle_x in (('front',front_door,-.39),('rear',rear_door,-1.37)):
+            trim_path(side_name+'_'+label+'_door_seam',[(x,side*.861,z) for x,z in points],.0035,trim)
+            b.box(side_name+'_'+label+'_handle_recess',(handle_x,side*.866,1.32),(.20,.025,.07),trim,bevel=.022)
+            b.box(side_name+'_'+label+'_door_handle',(handle_x,side*.895,1.333),(.14,.028,.025),m['alloy'],bevel=.009)
+        for x in (.51,-.67):
+            for z in (.91,1.23):
+                b.box(side_name+'_door_hinge',(x,side*.875,z),(.06,.024,.07),paint,bevel=.007)
+                b.cylinder(side_name+'_hinge_pin',(x-.022,side*.89,z-.035),(x-.022,side*.89,z+.035),.009,steel,vertices=10)
+
+        # Mirrors face aft toward the driver, with an independent dark housing.
+        b.tube(side_name+'_mirror_arm',[(.48,side*.84,1.58),(.42,side*.96,1.60),(.37,side*1.04,1.65)],.023,trim)
+        b.box(side_name+'_mirror_housing',(.36,side*1.075,1.655),(.14,.15,.19),trim,bevel=.035)
+        b.box(side_name+'_mirror_glass',(.282,side*1.075,1.655),(.010,.119,.15),m['chrome'],bevel=.015)
+        b.box(side_name+'_side_indicator',(.77,side*.865,1.23),(.12,.018,.038),m['amber'],bevel=.009)
+
+    # Hood and the upper cowl are separate from the open passenger cell.
+    b.box('hood',(1.325,0,1.404),(1.39,1.63,.078),paint,bevel=.030)
+    b.box('hood_center_raise',(1.30,0,1.452),(.96,.84,.025),paint,bevel=.035)
+    for side in (-1,1):
+        b.tube('hood_shut_line',[(.64,side*.824,1.42),(1.28,side*.824,1.42),(2.02,side*.802,1.42)],.004,trim)
+        b.box('hood_latch',(1.88,side*.84,1.315),(.065,.035,.12),trim,bevel=.013)
+        b.cylinder('hood_latch_pin',(1.88,side*.85,1.28),(1.88,side*.89,1.28),.013,m['alloy'],vertices=10)
+    b.box('front_cowl',(.59,0,1.435),(.11,1.63,.07),paint,bevel=.015)
+    b.box('cowl_vent',(.57,0,1.48),(.075,.83,.012),trim,bevel=.006)
+    for y in (-.32,-.24,-.16,-.08,0,.08,.16,.24,.32):
+        b.box('cowl_vent_slit',(.57,y,1.488),(.052,.025,.005),steel,bevel=.001)
+
+    windshield=[(.601,-.775,1.485),(.601,.775,1.485),(.343,.707,1.992),(.343,-.707,1.992)]
+    panel('windshield',windshield,(-.007,0,0),m['glass'])
+    trim_path('windshield_seal',windshield+[windshield[0]],.014,m['rubber'])
+    b.cylinder('windshield_lower_frame',(.62,-.82,1.44),(.62,.82,1.44),.028,paint,vertices=16)
+    b.cylinder('windshield_upper_frame',(.32,-.755,2.03),(.32,.755,2.03),.030,paint,vertices=16)
+    for y in (-.38,.36):
+        b.tube('windscreen_wiper_arm',[(.622,y,1.48),(.53,y-.10,1.65),(.455,y-.15,1.79)],.009,steel)
+        b.tube('windscreen_wiper_blade',[(.448,y-.35,1.80),(.448,y-.15,1.80),(.448,y+.07,1.80)],.012,trim)
+
+    b.box('roof',(-.80,0,2.075),(2.48,1.59,.085),m['roof'],bevel=.045)
+    rear_outline=[(-1.981,-.84,.75),(-1.981,.84,.75),(-1.965,.84,1.44),(-1.965,-.84,1.44)]
+    panel('tailgate_lower',rear_outline,(.035,0,0),paint,bevel=.01)
+    rear_window=[(-1.97,-.733,1.50),(-1.97,.733,1.50),(-1.95,.733,1.988),(-1.95,-.733,1.988)]
+    panel('tailgate_glass',rear_window,(.007,0,0),m['glass'])
+    trim_path('tailgate_window_seal',rear_window+[rear_window[0]],.014,m['rubber'])
+    for y in (-.78,.78):
+        b.cylinder('rear_corner_pillar',(-1.97,y,1.43),(-1.95,y*.96,2.03),.042,paint,vertices=12)
+    b.cylinder('rear_window_header',(-1.95,-.755,2.03),(-1.95,.755,2.03),.035,paint,vertices=12)
+    b.cylinder('rear_window_sill',(-1.97,-.82,1.445),(-1.97,.82,1.445),.040,paint,vertices=12)
+    b.tube('rear_window_wiper',[(-1.994,.48,1.51),(-1.998,.15,1.70),(-1.998,-.06,1.78)],.010,steel)
+    b.box('rear_window_wiper_blade',(-2.008,-.05,1.79),(.018,.48,.018),trim,bevel=.005)
+    b.box('tailgate_handle',(-2.012,-.61,1.35),(.030,.18,.065),trim,bevel=.017)
+    for y in (-.60,.60):
+        for z in (.92,1.36):
+            b.box('tailgate_hinge',(-2.01,y,z),(.04,.10,.055),paint,bevel=.008)
+
+    # Original wide horizontal grille rather than a brand-specific pattern.
+    b.box('front_fascia',(2.042,0,1.105),(.045,1.66,.60),paint,bevel=.025)
+    b.box('grille_recess',(2.074,0,1.18),(.038,.98,.40),trim,bevel=.030)
+    for z in (1.035,1.108,1.181,1.254,1.327):
+        b.box('grille_horizontal_bar',(2.102,0,z),(.030,.90,.026),steel,bevel=.008)
+    b.box('grille_center_bridge',(2.123,0,1.182),(.024,.063,.38),paint,bevel=.008)
+    for side in (-1,1):
+        b.box('headlight_housing',(2.084,side*.638,1.205),(.09,.315,.245),trim,bevel=.025)
+        for y in (side*.565,side*.710):
+            b.box('headlight_lens',(2.137,y,1.22),(.022,.111,.125),m['lamp'],bevel=.019)
+            b.box('headlight_projector_inner',(2.151,y,1.22),(.012,.065,.073),m['alloy'],bevel=.014)
+        b.box('daytime_running_light',(2.144,side*.638,1.113),(.014,.245,.015),m['lamp'],bevel=.005)
+        b.box('front_signal',(2.100,side*.67,.995),(.025,.19,.042),m['amber'],bevel=.008)
+        b.box('rear_light_housing',(-2.015,side*.704,1.191),(.065,.177,.36),trim,bevel=.020)
+        for z,material in ((1.30,m['red']),(1.205,m['red']),(1.115,m['amber']),(1.055,m['lamp'])):
+            b.box('rear_light_lens',(-2.056,side*.704,z),(.016,.137,.055),material,bevel=.012)
+
+    b.box('front_bumper',(2.142,0,.735),(.27,1.91,.205),trim,bevel=.045)
+    b.box('front_bumper_skid',(2.17,0,.595),(.17,1.15,.12),m['alloy'],bevel=.018,rotation=(0,-.22,0))
+    b.box('rear_bumper',(-2.075,0,.705),(.24,1.90,.20),trim,bevel=.040)
+    for side in (-1,1):
+        b.box('bumper_fog_recess',(2.286,side*.76,.75),(.025,.23,.10),steel,bevel=.020)
+        b.box('bumper_fog_lens',(2.305,side*.76,.75),(.018,.13,.057),m['lamp'],bevel=.011)
+        b.box('recovery_mount',(2.25,side*.53,.62),(.11,.07,.10),steel,bevel=.012)
+        b.torus('front_recovery_shackle',(2.31,side*.53,.603),.045,.012,m['bronze'],axis='X',major_segments=24,minor_segments=8)
+        b.cylinder('rear_recovery_eye',(-2.20,side*.57,.62),(-2.25,side*.57,.62),.035,steel,vertices=16)
+    # Winch is visibly mechanical, with roller fairlead and a wound cable drum.
+    b.box('winch_base',(2.10,0,.835),(.30,.59,.055),steel,bevel=.014)
+    b.cylinder('winch_drum',(2.11,-.18,.897),(2.11,.18,.897),.072,steel,vertices=24)
+    for y in (-.15,-.105,-.06,-.015,.03,.075,.12,.165):
+        b.torus('winch_cable_winding',(2.11,y,.897),.072,.009,m['alloy'],axis='Y',major_segments=24,minor_segments=6)
+    b.cylinder('winch_motor',(2.11,.19,.897),(2.11,.30,.897),.065,trim,vertices=24)
+    for z in (.795,.855):
+        b.cylinder('fairlead_horizontal_roller',(2.304,-.16,z),(2.304,.16,z),.015,m['alloy'],vertices=16)
+    for y in (-.165,.165):
+        b.cylinder('fairlead_vertical_roller',(2.304,y,.795),(2.304,y,.855),.018,m['alloy'],vertices=16)
+    b.tube('winch_lead',[(2.12,0,.90),(2.28,0,.825),(2.33,0,.79)],.008,steel)
+    b.torus('winch_hook',(2.34,0,.77),.025,.008,m['bronze'],axis='Y',major_segments=20,minor_segments=8)
+    b.box('rear_tow_receiver',(-2.15,0,.53),(.24,.095,.10),steel,bevel=.012)
+    b.cylinder('tow_ball_stem',(-2.29,0,.50),(-2.29,0,.57),.023,steel,vertices=16)
+    b.sphere('tow_ball',(-2.29,0,.60),(.035,.035,.035),m['chrome'],segments=16,rings=8)
+
+    # Passenger-side raised air intake and a restrained expedition roof basket.
+    b.tube('snorkel_riser',[(1.12,-.90,1.27),(.88,-.92,1.40),(.64,-.91,1.52),(.37,-.87,2.08)],.052,trim)
+    b.box('snorkel_head',(.39,-.87,2.135),(.21,.13,.12),trim,bevel=.025)
+    b.box('snorkel_intake',(.505,-.87,2.142),(.016,.103,.066),steel,bevel=.010)
+    for z in (2.125,2.146,2.167):
+        b.box('snorkel_intake_slit',(.516,-.87,z),(.008,.085,.007),m['rubber'],bevel=.002)
+    for side in (-1,1):
+        for x in (-1.61,-.78,.06):
+            b.box('roof_rack_foot',(x,side*.66,2.143),(.13,.10,.09),trim,bevel=.015)
+            b.cylinder('roof_rack_stanchion',(x,side*.66,2.16),(x,side*.66,2.25),.017,steel,vertices=12)
+        b.tube('roof_rack_side_rail',[(.18,side*.67,2.25),(-.70,side*.67,2.25),(-1.76,side*.67,2.25)],.020,steel)
+    for x in (.18,-1.76):
+        b.cylinder('roof_rack_end_rail',(x,-.67,2.25),(x,.67,2.25),.020,steel,vertices=12)
+    for x in (.08,-.28,-.64,-1.00,-1.36,-1.69):
+        b.box('roof_rack_crossbar',(x,0,2.198),(.045,1.32,.025),steel,bevel=.008)
+    b.box('roof_led_bar',(.21,0,2.205),(.09,.85,.075),trim,bevel=.015)
+    for y in (-.33,-.22,-.11,0,.11,.22,.33):
+        b.box('roof_led_lens',(.263,y,2.205),(.014,.073,.042),m['lamp'],bevel=.008)
+    b.cylinder('short_roof_antenna',(-1.84,.25,2.12),(-1.88,.25,2.36),.008,trim,vertices=10,radius2=.003)
+
+    return {'body': 'Hollow four-door expedition wagon with wheel-arch cutouts, transmitting glazing, rack, winch and snorkel.',
+            'note': 'Mirrors reach approximately 2.30 m width; antenna reaches 2.36 m. Glass relies on the transmission material supplied by the caller.'}
+
+
+def build_offroader_chassis(b, m):
+    """Detailed visual 4WD running gear; SI metres and no physics solver."""
+
+    def blocks(name, items, material, bevel=.0015):
+        vertices, faces = [], []
+        corners = ((-1,-1,-1),(1,-1,-1),(1,1,-1),(-1,1,-1),
+                   (-1,-1,1),(1,-1,1),(1,1,1),(-1,1,1))
+        cube_faces = ((0,3,2,1),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7))
+        for center, axes, half in items:
+            start = len(vertices)
+            for signs in corners:
+                vertices.append(tuple(center[k]+sum(signs[j]*half[j]*axes[j][k] for j in range(3)) for k in range(3)))
+            faces.extend(tuple(start+i for i in face) for face in cube_faces)
+        obj = b.mesh(name, vertices, faces, material, bevel=bevel)
+        if bevel:
+            # One bevel segment gives lugs a manufactured edge without multiplying
+            # every block into a high-poly component.
+            obj.modifiers[0].segments = 1
+        return obj
+
+    def wheel(name, center, outward=1, spare=False, pivot=None, steering=None):
+        cx, cy, cz = center
+
+        def point(u, axial, w):
+            return (cx-axial, cy+u, cz+w) if spare else (cx+u, cy+outward*axial, cz+w)
+
+        def direction(u, axial, w):
+            return (-axial,u,w) if spare else (u,outward*axial,w)
+
+        def attach(obj):
+            if pivot is not None:
+                b.parent(obj, pivot)
+            return obj
+
+        def ring(label, radius, thickness, axial, material, segments=64, minor=8):
+            obj = b.torus(name+'_'+label, point(0,axial,0), radius, thickness, material,
+                          axis='X' if spare else 'Y', major_segments=segments, minor_segments=minor)
+            return attach(obj)
+
+        def cylinder(label, start, end, radius, material, vertices=24):
+            return attach(b.cylinder(name+'_'+label,point(*start),point(*end),radius,material,vertices=vertices))
+
+        def profile_surface(label, profile, material, segments=72):
+            # A closed section gives a real tyre cavity and dished rim, rather
+            # than a solid disc. Profile points are (radius, axial position).
+            vertices=[]
+            for radius, axial in profile:
+                for i in range(segments):
+                    angle=math.tau*i/segments
+                    vertices.append(point(radius*math.sin(angle),axial,radius*math.cos(angle)))
+            faces=[]
+            for j in range(len(profile)):
+                for i in range(segments):
+                    faces.append((j*segments+i,j*segments+(i+1)%segments,
+                                  ((j+1)%len(profile))*segments+(i+1)%segments,
+                                  ((j+1)%len(profile))*segments+i))
+            return attach(b.mesh(name+'_'+label,vertices,faces,material,smooth=True))
+
+        profile_surface('tire_carcass',[(.234,-.102),(.295,-.137),(.357,-.139),
+                        (.393,-.112),(.410,-.065),(.414,0),(.410,.065),
+                        (.393,.112),(.357,.139),(.295,.137),(.234,.102),
+                        (.226,.075),(.226,-.075)],m['rubber'])
+        # Alternating chevron lugs are one mesh, with visible channels between
+        # adjacent rows and successive blocks. Maximum radial envelope is .43m.
+        lugs=[]
+        for row in (-1,0,1):
+            for i in range(32):
+                angle=math.tau*(i+(.5 if row else 0))/32
+                radial=Vector(direction(math.sin(angle),0,math.cos(angle)))
+                tangent=Vector(direction(math.cos(angle),0,-math.sin(angle)))
+                across=Vector(direction(0,1,0))
+                skew=(.25 if i%2 else -.25) if row==0 else row*.28
+                axes=(tuple(tangent*math.cos(skew)+across*math.sin(skew)),
+                      tuple(-tangent*math.sin(skew)+across*math.cos(skew)),tuple(radial))
+                radius=.4205 if row==0 else .405
+                center_block=point(radius*math.sin(angle),row*.089,radius*math.cos(angle))
+                lugs.append((center_block,axes,(.025,.034,.0095)))
+        attach(blocks(name+'_terrain_tread',lugs,m['tread']))
+        for side in (-1,1):
+            ring('sidewall_moulding',.312,.0024,side*.139,m['rubber'],minor=6)
+            ring('sidewall_bead',.242,.004,side*.107,m['rubber'],minor=6)
+
+        # Deep barrel and separate beadlock ring, with open paired spokes.
+        profile_surface('rim_barrel',[(.218,-.098),(.228,-.098),(.228,.105),
+                        (.217,.105),(.205,.072),(.205,-.069)],m['steel'],segments=48)
+        ring('outer_rim_lip',.224,.011,.107,m['bronze'],segments=64)
+        ring('inner_rim_lip',.224,.009,-.098,m['alloy'],segments=48)
+        ring('beadlock_ring',.207,.009,.119,m['bronze'],segments=64)
+        spokes=[]
+        for i in range(6):
+            for split in (-1,1):
+                angle=math.tau*i/6+split*.073
+                radial=Vector(direction(math.sin(angle),0,math.cos(angle)))
+                tangent=Vector(direction(math.cos(angle),0,-math.sin(angle)))
+                axes=(tuple(radial),tuple(direction(0,1,0)),tuple(tangent))
+                spokes.append((point(.139*math.sin(angle),.082,.139*math.cos(angle)),axes,(.071,.016,.014)))
+        attach(blocks(name+'_paired_alloy_spokes',spokes,m['bronze'],bevel=.003))
+        cylinder('hub_body',(0,-.052,0),(0,.114,0),.068,m['steel'],vertices=32)
+        cylinder('hub_cap',(0,.115,0),(0,.133,0),.047,m['bronze'],vertices=32)
+        for i in range(6):
+            angle=math.tau*i/6
+            u,w=.055*math.sin(angle),.055*math.cos(angle)
+            cylinder('wheel_nut',(u,.115,w),(u,.137,w),.009,m['chrome'],vertices=6)
+        for i in range(20):
+            angle=math.tau*i/20
+            u,w=.207*math.sin(angle),.207*math.cos(angle)
+            cylinder('beadlock_bolt',(u,.120,w),(u,.133,w),.0057,m['alloy'],vertices=6)
+        cylinder('valve_stem',(.162,.108,.104),(.162,.137,.104),.004,m['rubber'],vertices=8)
+
+        if not spare:
+            profile_surface('brake_rotor',[(.065,-.082),(.172,-.082),(.172,-.069),(.065,-.069)],m['alloy'],segments=64)
+            cylinder('brake_hat',(0,-.085,0),(0,-.053,0),.075,m['steel'],vertices=32)
+            # Calipers follow steering, but never the rolling wheel rotation.
+            caliper=b.box(name+'_brake_caliper',point(.126,-.086,.020),(.065,.052,.125),m['steel'],bevel=.014)
+            if steering is not None:
+                b.parent(caliper,steering)
+
+    # Ladder frame rails, raised ends and bolted crossmembers.
+    for side in (-1,1):
+        b.box('ladder_frame_rail',(.0,side*.48,.535),(3.52,.090,.155),m['steel'],bevel=.018)
+        for x in (-1.65,1.65):
+            b.box('frame_end_riser',(x,side*.48,.600),(.52,.096,.135),m['steel'],bevel=.015)
+        for x in (-1.45,-.62,.56,1.46):
+            b.cylinder('body_mount',(x,side*.48,.59),(x,side*.48,.68),.047,m['rubber'],vertices=20)
+            b.cylinder('body_mount_bolt',(x,side*.48,.665),(x,side*.48,.693),.012,m['alloy'],vertices=6)
+    for x in (-1.76,-.76,.18,.91,1.76):
+        b.box('frame_crossmember',(x,0,.54),(.095,1.05,.105),m['steel'],bevel=.012)
+
+    # Transfer case and separate driveshafts visibly establish 4WD running gear.
+    b.box('gearbox_housing',(.56,0,.59),(.55,.30,.22),m['alloy'],bevel=.065)
+    b.box('transfer_case',(.03,0,.53),(.37,.35,.20),m['steel'],bevel=.055)
+    b.box('transfer_case_skid',(.12,0,.385),(.84,.63,.055),m['alloy'],bevel=.018)
+    for x in (-.18,.39):
+        for y in (-.255,.255):
+            b.cylinder('skid_plate_bolt',(x,y,.35),(x,y,.365),.010,m['steel'],vertices=6)
+    b.cylinder('front_prop_shaft',(.20,0,.53),(1.32,0,.43),.028,m['steel'],vertices=20)
+    b.cylinder('rear_prop_shaft',(-.13,0,.52),(-1.32,0,.43),.032,m['steel'],vertices=20)
+    for x in (-1.20,1.18):
+        b.cylinder('prop_shaft_universal_joint',(x-.055,0,.445),(x+.055,0,.445),.045,m['alloy'],vertices=16)
+
+    def coil(name, a, end, radius=.058, wire=.0075, turns=5):
+        a,end=Vector(a),Vector(end)
+        direction=end-a
+        axis=direction.normalized()
+        helper=Vector((0,1,0)) if abs(axis.y)<.9 else Vector((1,0,0))
+        u=axis.cross(helper).normalized()
+        v=axis.cross(u).normalized()
+        vertices,faces=[],[]
+        steps,sides=81,6
+        for i in range(steps):
+            t=i/(steps-1); angle=math.tau*turns*t
+            radial=math.cos(angle)*u+math.sin(angle)*v
+            tangent=(direction+math.tau*turns*radius*(-math.sin(angle)*u+math.cos(angle)*v)).normalized()
+            normal=tangent.cross(radial).normalized()
+            center=a+direction*t+radial*radius
+            for j in range(sides):
+                phi=math.tau*j/sides
+                vertices.append(tuple(center+wire*(math.cos(phi)*radial+math.sin(phi)*normal)))
+        for i in range(steps-1):
+            faces.extend((i*sides+j,i*sides+(j+1)%sides,(i+1)*sides+(j+1)%sides,(i+1)*sides+j) for j in range(sides))
+        faces += [tuple(reversed(range(sides))),tuple((steps-1)*sides+j for j in range(sides))]
+        return b.mesh(name,vertices,faces,m['steel'],smooth=True)
+
+    pivots={}
+    for axle_name,cx in (('front',1.32),('rear',-1.32)):
+        b.cylinder(axle_name+'_axle_tube',(cx,-.83,.43),(cx,.83,.43),.053,m['steel'],vertices=24)
+        b.sphere(axle_name+'_differential',(cx,0,.415),(.175,.19,.155),m['steel'],segments=32,rings=16)
+        b.cylinder(axle_name+'_diff_cover',(cx-.18,0,.415),(cx-.192,0,.415),.126,m['alloy'],vertices=24)
+        for i in range(10):
+            angle=math.tau*i/10
+            b.cylinder(axle_name+'_diff_cover_bolt',(cx-.193,.11*math.sin(angle),.415+.11*math.cos(angle)),
+                       (cx-.206,.11*math.sin(angle),.415+.11*math.cos(angle)),.009,m['steel'],vertices=6)
+        for side,side_name in ((1,'left'),(-1,'right')):
+            center=(cx,side*.92,.43)
+            steering=None
+            if axle_name=='front':
+                steering=b.empty('front_'+side_name+'_steering_pivot',center)
+                pivots['front_'+side_name+'_steering_pivot']=steering
+            pivot=b.empty(axle_name+'_'+side_name+'_wheel_pivot',center)
+            if steering is not None:
+                b.parent(pivot,steering)
+            pivots[axle_name+'_'+side_name+'_wheel_pivot']=pivot
+            wheel(axle_name+'_'+side_name,center,outward=side,pivot=pivot,steering=steering)
+            # Radius arms locate the rigid axles; shocks and springs are static
+            # visual parts pending the target engine's suspension simulation.
+            anchor_x=cx-.70 if axle_name=='front' else cx+.72
+            b.cylinder(axle_name+'_'+side_name+'_radius_arm',(anchor_x,side*.46,.49),(cx,side*.68,.39),.025,m['steel'],vertices=16)
+            b.cylinder(axle_name+'_'+side_name+'_upper_link',(anchor_x,side*.34,.61),(cx,side*.43,.49),.018,m['steel'],vertices=12)
+            for x,y,z in ((anchor_x,side*.46,.49),(cx,side*.68,.39)):
+                b.cylinder('suspension_bush',(x,y-.025,z),(x,y+.025,z),.037,m['rubber'],vertices=16)
+                b.cylinder('suspension_link_bolt',(x,y-.035,z),(x,y+.035,z),.011,m['alloy'],vertices=6)
+            coil(axle_name+'_'+side_name+'_suspension_spring',(cx,side*.60,.49),(cx,side*.60,.72))
+            for z in (.475,.73):
+                b.cylinder('spring_seat',(cx,side*.60,z-.009),(cx,side*.60,z+.009),.073,m['steel'],vertices=24)
+            a=(cx-.15,side*.70,.44); end=(cx+.16,side*.61,.75)
+            b.cylinder('shock_absorber_body',a,tuple(Vector(a).lerp(Vector(end),.65)),.028,m['paint'],vertices=20)
+            b.cylinder('shock_absorber_piston',tuple(Vector(a).lerp(Vector(end),.56)),end,.014,m['chrome'],vertices=16)
+            if steering is not None:
+                knuckle=b.cylinder(side_name+'_steering_knuckle',(cx,side*.77,.43),(cx,side*.87,.43),.072,m['steel'],vertices=20)
+                b.parent(knuckle,steering)
+                arm=b.cylinder(side_name+'_steering_arm',(cx,side*.79,.41),(cx-.16,side*.77,.40),.024,m['steel'],vertices=12)
+                b.parent(arm,steering)
+    b.cylinder('front_tie_rod',(1.16,-.77,.40),(1.16,.77,.40),.018,m['steel'],vertices=16)
+    b.cylinder('steering_drag_link',(.96,-.38,.64),(1.16,.61,.40),.018,m['steel'],vertices=16)
+    b.cylinder('rear_panhard_rod',(-1.32,-.62,.45),(-1.08,.56,.62),.019,m['steel'],vertices=16)
+
+    # Exhaust avoids the cabin floor and axle travel envelope; the outlet sits
+    # behind the rear wheel and points toward the vehicle side.
+    b.tube('underbody_exhaust',[(1.22,-.26,.63),(.76,-.36,.47),(.16,-.35,.46),
+                              (-.55,-.35,.46),(-.98,-.39,.62),(-1.43,-.41,.63),(-1.83,-.68,.51)],.026,m['steel'],resolution=1)
+    b.box('exhaust_silencer',(-.32,-.34,.49),(.65,.22,.15),m['alloy'],bevel=.055)
+    b.cylinder('exhaust_outlet',(-1.83,-.68,.51),(-1.86,-.84,.50),.034,m['alloy'],vertices=24)
+    b.cylinder('exhaust_outlet_shadow',(-1.86,-.842,.50),(-1.862,-.850,.499),.026,m['trim'],vertices=24)
+    # The fifth matching wheel is a static carrier-mounted spare, not a driving
+    # wheel; no extra animation pivot is exported for it.
+    b.box('spare_carrier_backplate',(-2.005,0,1.20),(.08,.38,.44),m['steel'],bevel=.018)
+    for y in (-.16,.16):
+        b.cylinder('spare_carrier_support',(-1.99,y,1.12),(-2.15,y*.45,1.22),.023,m['steel'],vertices=16)
+    wheel('rear_spare',(-2.16,0,1.22),spare=True)
+    return {'moving_parts':list(pivots), 'wheel_radius_m':.43, 'wheelbase_m':2.64,
+            'track_m':1.84, 'tire_width_m':.28,
+            'notes':['Front wheel pivots are children of Z-axis steering pivots.',
+                     'Brake discs roll with the wheels; front calipers follow steering only.',
+                     'Axle links, springs and dampers are visual static geometry until engine rigging.']}
+
+def build_offroader_interior(b, m):
+    """Basic left-hand-drive five-seat cabin; static geometry in SI metres.
+
+    Seats, belts and controls are modelled for exterior/interior inspection,
+    without occupants, working instruments or an authored first-person rig.
+    """
+    fabric, plastic = m['fabric'], m['interior']
+    rubber, alloy, steel = m['rubber'], m['alloy'], m['steel']
+
+    # A thin cabin liner remains inside the actual sill and wheel envelope.
+    b.box('cabin_floor_liner', (-.64, 0, .768), (2.48, 1.48, .022), rubber, bevel=.008)
+    for side in (-1, 1):
+        b.box('front_footwell_mat', (.25, side*.41, .785), (.60, .46, .014), rubber, bevel=.016)
+        for i in range(7):
+            b.box('footwell_mat_rib', (.04+i*.068, side*.41, .794), (.012, .37, .005), m['trim'], bevel=.002)
+        b.box('rear_footwell_mat', (-.73, side*.41, .785), (.36, .46, .014), rubber, bevel=.014)
+    b.box('cargo_floor_mat', (-1.73, 0, .79), (.30, 1.41, .030), rubber, bevel=.012)
+    for side in (-1, 1):
+        b.torus('cargo_tie_down', (-1.73, side*.60, .811), .025, .004, steel,
+                axis='Z', major_segments=16, minor_segments=6)
+
+    def ribbon(name, points, width, material):
+        # Flat closed belt strips, not round cables. Width lies mostly in X.
+        vertices=[]
+        for point in points:
+            x,y,z=point
+            vertices.extend([(x-width*.5,y-.0015,z),(x+width*.5,y-.0015,z),
+                             (x+width*.5,y+.0015,z),(x-width*.5,y+.0015,z)])
+        faces=[(3,2,1,0)]
+        for i in range(len(points)-1):
+            faces.extend((i*4+j,i*4+(j+1)%4,(i+1)*4+(j+1)%4,(i+1)*4+j) for j in range(4))
+        faces.append(tuple((len(points)-1)*4+j for j in range(4)))
+        return b.mesh(name,vertices,faces,material)
+
+    # Two individually shaped front seats: bolsters, inserts and headrests.
+    for side, label in ((1,'driver'),(-1,'passenger')):
+        y=side*.40
+        for rail_y in (y-.16,y+.16):
+            b.box(label+'_seat_rail',(-.18,rail_y,.82),(.46,.032,.035),steel,bevel=.007)
+            b.box(label+'_seat_pedestal',(-.20,rail_y,.90),(.25,.045,.14),plastic,bevel=.018)
+        b.box(label+'_seat_cushion',(-.15,y,1.015),(.49,.47,.145),fabric,bevel=.050)
+        b.box(label+'_cushion_insert',(-.12,y,1.091),(.35,.30,.018),fabric,bevel=.025)
+        for offset in (-.21,.21):
+            b.box(label+'_cushion_bolster',(-.16,y+offset,1.085),(.43,.070,.10),fabric,bevel=.031)
+        b.box(label+'_seat_back',(-.43,y,1.34),(.14,.47,.60),fabric,bevel=.050,rotation=(0,-.14,0))
+        b.box(label+'_back_insert',(-.345,y,1.34),(.023,.30,.45),fabric,bevel=.025,rotation=(0,-.14,0))
+        for offset in (-.205,.205):
+            b.box(label+'_back_bolster',(-.385,y+offset,1.35),(.12,.075,.52),fabric,bevel=.034,rotation=(0,-.14,0))
+        # Subtle piping defines upholstery seams without dense fake text.
+        for offset in (-.145,.145):
+            b.tube(label+'_seat_stitch',[(-.32,y+offset,1.103),(-.16,y+offset,1.107),(.015,y+offset,1.103)],.0018,m['roof'],resolution=1)
+            b.tube(label+'_back_stitch',[(-.307,y+offset,1.15),(-.331,y+offset,1.34),(-.359,y+offset,1.53)],.0018,m['roof'],resolution=1)
+        for offset in (-.09,.09):
+            b.cylinder(label+'_headrest_post',(-.475,y+offset,1.60),(-.495,y+offset,1.72),.008,alloy,vertices=12)
+        b.box(label+'_headrest',(-.50,y,1.745),(.15,.29,.20),fabric,bevel=.047)
+        # Retracted unoccupied belts hang at the B pillar, outside the seats.
+        ribbon(label+'_shoulder_belt',[(-.47,side*.744,1.79),(-.43,side*.735,1.50),
+                                      (-.30,side*.67,1.08),(-.30,side*.66,.83)],.040,rubber)
+        b.box(label+'_upper_belt_anchor',(-.47,side*.748,1.79),(.078,.025,.055),plastic,bevel=.012)
+        b.box(label+'_belt_retractor',(-.30,side*.685,.89),(.11,.075,.16),plastic,bevel=.018)
+        b.cylinder(label+'_buckle_stalk',(-.22,side*.14,.91),(-.16,side*.14,1.10),.009,steel,vertices=10)
+        b.box(label+'_belt_buckle',(-.16,side*.14,1.12),(.045,.035,.065),plastic,bevel=.010)
+        b.box(label+'_buckle_release',(-.143,side*.14,1.14),(.014,.025,.022),m['red'],bevel=.004)
+
+    # Rear bench has three seating positions and restrained segmentation.
+    b.box('rear_bench_base',(-1.22,0,.90),(.43,1.35,.17),plastic,bevel=.035)
+    for index,y in enumerate((-.46,0,.46)):
+        prefix='rear_seat_'+str(index)
+        b.box(prefix+'_cushion',(-1.18,y,1.025),(.48,.435,.15),fabric,bevel=.040)
+        b.box(prefix+'_back',(-1.49,y,1.345),(.14,.435,.59),fabric,bevel=.043,rotation=(0,-.10,0))
+        b.box(prefix+'_back_insert',(-1.412,y,1.35),(.016,.30,.43),fabric,bevel=.018,rotation=(0,-.10,0))
+        for offset in (-.13,.13):
+            b.tube(prefix+'_cushion_stitch',[(-1.35,y+offset,1.107),(-1.18,y+offset,1.109),(-1.00,y+offset,1.106)],.0018,m['roof'],resolution=1)
+        for offset in (-.08,.08):
+            b.cylinder(prefix+'_headrest_post',(-1.52,y+offset,1.60),(-1.53,y+offset,1.71),.0075,alloy,vertices=10)
+        b.box(prefix+'_headrest',(-1.54,y,1.74),(.14,.28,.19),fabric,bevel=.040)
+        b.box(prefix+'_buckle',(-1.08,y+.16,1.105),(.045,.029,.055),plastic,bevel=.008)
+        b.box(prefix+'_buckle_release',(-1.056,y+.16,1.119),(.009,.020,.020),m['red'],bevel=.003)
+    for side in (-1,1):
+        ribbon('rear_shoulder_belt',[(-1.57,side*.736,1.78),(-1.50,side*.724,1.42),
+                                    (-1.23,side*.70,1.07),(-1.30,side*.70,.86)],.038,rubber)
+    ribbon('rear_center_belt',[(-1.57,.10,1.64),(-1.414,.10,1.46),(-1.38,-.08,1.12)],.037,rubber)
+
+    # Dashboard is a shaped shallow assembly below the windshield sill.
+    b.box('dashboard_upper',(.47,0,1.335),(.31,1.43,.18),plastic,bevel=.048)
+    b.box('dashboard_lower',(.48,0,1.18),(.24,1.41,.15),plastic,bevel=.030)
+    b.box('instrument_binnacle',(.31,.42,1.415),(.085,.37,.18),m['trim'],bevel=.035)
+    for index,gy in enumerate((.335,.505)):
+        b.cylinder('instrument_gauge_face',(.258,gy,1.421),(.266,gy,1.421),.064,m['display'],vertices=40)
+        b.torus('instrument_gauge_bezel',(.255,gy,1.421),.064,.004,alloy,axis='X',major_segments=40,minor_segments=8)
+        for tick in range(11):
+            angle=math.radians(-130+tick*26)
+            a=(.250,gy+.047*math.sin(angle),1.421+.047*math.cos(angle))
+            c=(.250,gy+.054*math.sin(angle),1.421+.054*math.cos(angle))
+            b.cylinder('instrument_tick',a,c,.0010,m['roof'],vertices=6)
+        angle=math.radians(-42+index*27)
+        b.cylinder('instrument_needle',(.245,gy,1.421),(.245,gy+.043*math.sin(angle),1.421+.043*math.cos(angle)),.0016,m['red'],vertices=6)
+        b.cylinder('instrument_needle_hub',(.242,gy,1.421),(.247,gy,1.421),.005,alloy,vertices=12)
+
+    b.box('center_display_bezel',(.300,-.02,1.36),(.026,.27,.18),m['trim'],bevel=.014)
+    b.box('center_display',(.284,-.02,1.363),(.005,.23,.14),m['display'],bevel=.008)
+    # Generic geometric interface details: no fabricated brand or readable claims.
+    for index,width in enumerate((.14,.10,.16)):
+        b.box('display_information_bar',(.280,-.04,1.398-index*.031),(.001,width,.005),m['roof'])
+    b.box('display_indicator',(.279,.070,1.37),(.001,.012,.048),m['amber'],bevel=.002)
+    for gy,gz in ((-.64,1.32),(.65,1.32),(-.09,1.223),(.10,1.223)):
+        b.box('dashboard_air_vent',(.309,gy,gz),(.018,.145,.062),m['trim'],bevel=.010)
+        for slat in range(4):
+            b.box('air_vent_louvre',(.297,gy,gz-.021+slat*.014),(.012,.121,.004),alloy,bevel=.001)
+    b.box('passenger_grab_handle',(.29,-.43,1.205),(.040,.32,.035),m['trim'],bevel=.015)
+    for gy in (-.57,-.29):
+        b.cylinder('grab_handle_mount',(.33,gy,1.205),(.29,gy,1.205),.012,steel,vertices=10)
+    b.box('glovebox_lid',(.345,-.46,1.10),(.020,.43,.13),plastic,bevel=.018)
+    b.box('glovebox_latch',(.332,-.46,1.145),(.014,.060,.019),alloy,bevel=.005)
+
+    # Fixed steering wheel and stalks, angled toward the driver's seat.
+    center=Vector((.145,.42,1.345))
+    normal=Vector((-.89,0,.455)).normalized()
+    b.cylinder('steering_column',(.375,.42,1.23),tuple(center),.025,steel,vertices=20)
+    wheel=b.torus('steering_wheel_rim',tuple(center),.163,.016,m['trim'],axis='Z',major_segments=56,minor_segments=10)
+    wheel.rotation_mode='QUATERNION'
+    wheel.rotation_quaternion=Vector((0,0,1)).rotation_difference(normal)
+    u=Vector((0,1,0)); v=normal.cross(u).normalized()
+    b.cylinder('steering_wheel_hub',tuple(center-normal*.021),tuple(center+normal*.021),.052,plastic,vertices=28)
+    for angle in (0,math.pi,math.pi/2):
+        direction=math.cos(angle)*u+math.sin(angle)*v
+        b.cylinder('steering_wheel_spoke',tuple(center+direction*.035),tuple(center+direction*.149),.014,alloy,vertices=10)
+    for side in (-1,1):
+        b.cylinder('steering_column_stalk',(.25,.42+side*.035,1.29),(.22,.42+side*.155,1.30),.007,plastic,vertices=10)
+        b.sphere('steering_stalk_end',(.22,.42+side*.155,1.30),(.016,.026,.012),m['trim'],segments=12,rings=6)
+
+    b.box('center_console',(-.09,0,.976),(.57,.23,.30),plastic,bevel=.035)
+    b.box('center_console_top',(-.09,0,1.13),(.52,.215,.025),m['trim'],bevel=.018)
+    for gx,gy,length in ((.065,-.035,.17),(-.14,.055,.10)):
+        b.sphere('gear_lever_boot',(gx,gy,1.153),(.052,.040,.030),rubber,segments=20,rings=10)
+        b.cylinder('gear_lever_shaft',(gx,gy,1.16),(gx-.025,gy,1.16+length),.008,alloy,vertices=12)
+        b.sphere('gear_lever_knob',(gx-.025,gy,1.17+length),(.028,.025,.030),m['trim'],segments=20,rings=10)
+    for gy in (-.055,.055):
+        b.cylinder('console_cup_well',(-.29,gy,1.143),(-.29,gy,1.149),.034,rubber,vertices=24)
+        b.torus('console_cup_rim',(-.29,gy,1.153),.034,.004,m['trim'],axis='Z',major_segments=24,minor_segments=6)
+    b.cylinder('parking_brake_lever',(-.27,.135,1.01),(-.03,.135,1.085),.012,steel,vertices=12)
+    b.cylinder('parking_brake_grip',(-.12,.135,1.057),(-.02,.135,1.088),.018,rubber,vertices=16)
+    for gy,width in ((.30,.040),(.43,.055),(.56,.055)):
+        b.cylinder('pedal_arm',(.51,gy,1.04),(.42,gy,.89),.009,steel,vertices=10)
+        b.box('pedal_pad',(.405,gy,.885),(.030,width,.087),rubber,bevel=.009,rotation=(0,-.18,0))
+
+    # Door cards stay beneath the glazing line; armrests remain inside the cabin.
+    for side in (-1,1):
+        for x in (-.04,-1.11):
+            b.box('inner_door_card',(x,side*.785,1.12),(.69,.023,.37),plastic,bevel=.025)
+            b.box('door_armrest',(x-.04,side*.753,1.24),(.40,.070,.065),fabric,bevel=.022)
+            b.box('door_pull_recess',(x+.17,side*.758,1.315),(.11,.027,.050),m['trim'],bevel=.012)
+            b.box('interior_door_handle',(x+.17,side*.739,1.315),(.075,.015,.017),alloy,bevel=.006)
+            b.box('door_storage_pocket',(x-.02,side*.752,.965),(.45,.070,.12),plastic,bevel=.024)
+    b.box('roof_console',(-.12,0,1.975),(.25,.17,.033),plastic,bevel=.015)
+    b.box('cabin_dome_light',(-.12,0,1.953),(.13,.10,.008),m['roof'],bevel=.010)
+    for side in (-1,1):
+        b.box('sun_visor',(.27,side*.39,1.947),(.12,.40,.030),fabric,bevel=.012,rotation=(0,-.07,0))
+
+    return {
+        'seating': 'Two front seats and three-place rear bench with headrests and retracted belts.',
+        'controls': 'Static steering wheel, geometric gauges, generic screen, gear/transfer selectors and pedals.',
+        'limitations': 'Basic modeled cabin, no occupants, functioning instruments, animations or first-person interior certification.'
     }
 
 if __name__ == "__main__":

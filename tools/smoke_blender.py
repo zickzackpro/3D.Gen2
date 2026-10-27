@@ -32,6 +32,11 @@ EXPECTED_ROLES = {
         "left_aileron_pivot", "right_aileron_pivot", "left_flap_pivot", "right_flap_pivot",
         "elevator_pivot", "rudder_pivot",
     },
+    "offroader": {
+        "front_left_steering_pivot", "front_right_steering_pivot",
+        "front_left_wheel_pivot", "front_right_wheel_pivot",
+        "rear_left_wheel_pivot", "rear_right_wheel_pivot",
+    },
 }
 
 PIVOT_AXES = {
@@ -41,6 +46,9 @@ PIVOT_AXES = {
     "right_wheel_pivot": "Y", "left_aileron_pivot": "Y", "right_aileron_pivot": "Y",
     "left_flap_pivot": "Y", "right_flap_pivot": "Y", "elevator_pivot": "Y",
     "rudder_pivot": "Z",
+    "front_left_steering_pivot": "Z", "front_right_steering_pivot": "Z",
+    "front_left_wheel_pivot": "Y", "front_right_wheel_pivot": "Y",
+    "rear_left_wheel_pivot": "Y", "rear_right_wheel_pivot": "Y",
 }
 
 
@@ -171,6 +179,57 @@ def check_images(path):
     return len(referenced)
 
 
+def check_offroader_components(objects, path):
+    """Verify nested steering and the actual exported/imported glazing material."""
+    by_role = {obj.get("part_role"): obj for obj in objects if obj.get("part_role")}
+    parents = {}
+    for side in ("left", "right"):
+        wheel_role = f"front_{side}_wheel_pivot"
+        steering_role = f"front_{side}_steering_pivot"
+        check(by_role[wheel_role].parent == by_role[steering_role],
+              f"{wheel_role} is not directly parented to {steering_role}")
+        parents[wheel_role] = steering_role
+
+    document = GLB(path).doc
+    materials = document.get("materials", [])
+    used_indices = {
+        primitive["material"] for mesh in document.get("meshes", [])
+        for primitive in mesh.get("primitives", []) if "material" in primitive
+    }
+    transmitted = []
+    for index in used_indices:
+        material = materials[index]
+        extension = material.get("extensions", {}).get("KHR_materials_transmission", {})
+        factor = extension.get("transmissionFactor", 0)
+        if isinstance(factor, (int, float)) and factor > 0:
+            check(math.isfinite(factor) and factor <= 1,
+                  "Invalid exported offroader glazing transmission")
+            transmitted.append((material.get("name"), factor))
+    check(transmitted, "Offroader GLB lost its nonzero KHR_materials_transmission glazing")
+    check("KHR_materials_transmission" in document.get("extensionsUsed", []),
+          "Offroader GLB does not declare its transmission extension")
+
+    imported_materials = {
+        material for obj in objects if obj.type == "MESH"
+        for material in obj.data.materials if material
+    }
+    glazing = []
+    for name, factor in transmitted:
+        matches = [material for material in imported_materials if material.name == name]
+        check(len(matches) == 1, f"Exported glazing {name!r} is not assigned after Blender import")
+        material = matches[0]
+        check(material.use_nodes, f"Imported glazing {name!r} has no shader nodes")
+        weights = [node.inputs.get("Transmission Weight") for node in material.node_tree.nodes
+                   if node.type == "BSDF_PRINCIPLED"]
+        check(any(weight is not None and not weight.is_linked
+                  and weight.default_value > 0
+                  and math.isclose(weight.default_value, factor, rel_tol=1e-5, abs_tol=1e-6)
+                  for weight in weights),
+              f"Imported glazing {name!r} lost its Principled transmission value {factor}")
+        glazing.append({"material": name, "transmission_factor": factor})
+    return {"front_wheel_parents": parents, "glazing_transmission": glazing}
+
+
 def check_asset(manifest_path):
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     name, directory = manifest["asset"], manifest_path.parent
@@ -216,6 +275,7 @@ def check_asset(manifest_path):
     for obj in objects:
         if obj.type == "MESH":
             check(bool(obj.data.uv_layers), f"Mesh {obj.name} has no UV layer after import")
+    offroader = check_offroader_components(objects, lod_path) if name == "offroader" else None
 
     collision_objects = reset_and_import(collision_path)
     collision = mesh_statistics(collision_objects)
@@ -226,10 +286,13 @@ def check_asset(manifest_path):
     check_bounds(collision["bounds"], reference_collision["bounds"], name + " collision")
     check(all(obj.get("collision_proxy") for obj in collision_objects if obj.type == "MESH"),
           "Collision proxy extras did not survive import")
-    return {"asset": name, "ok": True, "lod0": actual,
-            "pivot_mesh_descendants": roles, "embedded_images": textures,
-            "pivot_rotation_checks": rotations,
-            "collision": collision}
+    result = {"asset": name, "ok": True, "lod0": actual,
+              "pivot_mesh_descendants": roles, "embedded_images": textures,
+              "pivot_rotation_checks": rotations,
+              "collision": collision}
+    if offroader is not None:
+        result["offroader_components"] = offroader
+    return result
 
 
 def main():
@@ -248,7 +311,7 @@ def main():
             errors.append({"manifest": str(path), "error": str(error)})
     result = {"ok": not errors, "blender_version": bpy.app.version_string,
               "assets": reports, "errors": errors,
-              "scope": "Blender GLB import, transforms, pivot rotation/isolation and embedded textures; no rendering or engine acceptance."}
+              "scope": "Blender GLB import, transforms, pivot rotation/isolation, offroader steering/glazing and embedded textures; no rendering or engine acceptance."}
     print("BLENDER_ROUNDTRIP_RESULT " + json.dumps(result, indent=2), flush=True)
     check(not errors, "Blender GLB round-trip validation failed; see JSON report")
 
