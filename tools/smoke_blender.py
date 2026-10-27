@@ -239,6 +239,50 @@ def check_glazing_transmission(objects, path, label, expected_factor=None):
     return glazing
 
 
+def check_offroader_source():
+    """Check visible construction: open shut lines, seated lamps and authored UVs."""
+    objects=list(bpy.data.collections['offroader_SOURCE'].objects)
+    meshes=[obj for obj in objects if obj.type=='MESH']
+    bpy.context.view_layer.update()
+    def first_hit(origin,direction):
+        hits=[]
+        for obj in meshes:
+            inverse=obj.matrix_world.inverted()
+            local_direction=(inverse.to_3x3()@direction).normalized()
+            hit,point,_,_=obj.ray_cast(inverse@origin,local_direction)
+            if hit:
+                world=obj.matrix_world@point
+                hits.append(((world-origin).length,world,obj))
+        check(hits,'Inspection ray missed all vehicle surfaces')
+        return min(hits,key=lambda item:item[0])
+    recesses=[]
+    for side in (-1,1):
+        for edge,skin_x in ((.5785,.55),(-.6115,-.64)):
+            direction=Vector((0,-side,0))
+            gap=first_hit(Vector((edge,side*2,1.10)),direction)
+            skin=first_hit(Vector((skin_x,side*2,1.10)),direction)
+            recess=gap[0]-skin[0]
+            check(recess>.015,'Door shut line has no physical recess behind its skin')
+            recesses.append(round(recess,5))
+    def axis_extent(token,axis):
+        return [((obj.matrix_world@Vector(corner))[axis]) for obj in meshes if token in obj.name for corner in obj.bound_box]
+    panel=axis_extent('stamped_headlamp_surround',0)
+    lens=axis_extent('headlamp_outer_cover',0)
+    reflector=axis_extent('headlamp_parabolic_reflector',0)
+    check(panel and lens and reflector,'Missing headlamp construction surfaces')
+    check(0<=max(lens)-max(panel)<.03,'Headlamp cover projects too far beyond its surrounding body panel')
+    check(min(reflector)<max(panel)-.025,'Headlamp reflector has no recessed optical depth')
+    lettering=[obj for obj in meshes if obj.get('sidewall_size')]
+    check(len(lettering)==5,'Tire sidewall lettering is missing from a road wheel or the spare')
+    for obj in lettering:
+        check(obj.data.uv_layers.active is not None,'Sidewall atlas lost its UV mapping')
+        coords=[tuple(uv.uv) for uv in obj.data.uv_layers.active.data]
+        check(min(c[0] for c in coords)<.001 and max(c[0] for c in coords)>.999,
+              'Sidewall circumference UV was repacked instead of preserved')
+    return {'door_gap_recess_m':recesses,'headlamp_cover_projection_m':round(max(lens)-max(panel),5),
+            'sidewall_atlases':len(lettering)}
+
+
 def check_offroader_components(objects, path):
     """Verify steering, optical materials and engine access through the opening hood."""
     by_role = {obj.get("part_role"): obj for obj in objects if obj.get("part_role")}
@@ -261,6 +305,10 @@ def check_offroader_components(objects, path):
                       if p.get("material") in paint_indices]
     check(paint_primitives and all("COLOR_0" in p.get("attributes", {}) for p in paint_primitives),
           "Baked paint and road-dust vertex colors were lost during export")
+    for token in ('moulded_sidewall','seat_insert'):
+        materials=[mat for mat in document.get('materials',[]) if token in mat.get('name','')]
+        check(materials and all(mat.get('normalTexture') for mat in materials),
+              f'{token} lost its authored relief texture during export')
     engine = by_role.get("engine_bay_assembly")
     check(engine is not None, "Engine bay assembly missing from export")
     engine_meshes = descendant_meshes(engine)
@@ -330,6 +378,7 @@ def check_asset(manifest_path):
     check(len(source_collision) == manifest["collision_proxies"],
           "Source collision proxy count differs from manifest")
     reference_collision = mesh_statistics(source_collision)
+    offroader_source=check_offroader_source() if name=='offroader' else None
     boat_source_bounds = None
     if name == "motorboat":
         source = bpy.data.collections.get("motorboat_SOURCE")
@@ -376,6 +425,7 @@ def check_asset(manifest_path):
               "collision": collision}
     if offroader is not None:
         result["offroader_components"] = offroader
+        result['offroader_source_construction']=offroader_source
     if motorboat is not None:
         result["motorboat_components"] = motorboat
     return result
@@ -397,7 +447,7 @@ def main():
             errors.append({"manifest": str(path), "error": str(error)})
     result = {"ok": not errors, "blender_version": bpy.app.version_string,
               "assets": reports, "errors": errors,
-              "scope": "Blender GLB import, transforms, pivot rotation/isolation, steering/glazing, boat waterline and embedded textures; no rendering or engine acceptance."}
+              "scope": "Blender GLB import, transforms, pivot rotation/isolation, steering/glazing, offroader construction/relief maps, boat waterline and embedded textures; no rendering or engine acceptance."}
     print("BLENDER_ROUNDTRIP_RESULT " + json.dumps(result, indent=2), flush=True)
     check(not errors, "Blender GLB round-trip validation failed; see JSON report")
 

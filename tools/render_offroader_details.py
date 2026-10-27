@@ -12,6 +12,7 @@ from pathlib import Path
 import sys
 
 import bpy
+import _cycles
 from mathutils import Vector
 
 SCRIPT_SHA256 = hashlib.sha256(Path(__file__).resolve().read_bytes()).hexdigest()
@@ -26,7 +27,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--asset-dir', type=Path, required=True)
     parser.add_argument('--resolution', type=int, default=1400)
-    parser.add_argument('--samples', type=int, default=192)
+    parser.add_argument('--samples', type=int, default=384)
     parser.add_argument('--views', nargs='+', choices=('engine','cockpit','interior'), default=['engine','cockpit','interior'])
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:])
     directory = args.asset_dir.resolve()
@@ -45,7 +46,11 @@ def main():
         scene.render.resolution_y=int(args.resolution*.75)
         scene.render.resolution_percentage=100
         scene.cycles.samples=args.samples
-        scene.cycles.use_denoising=False
+        scene.cycles.use_denoising=bool(getattr(_cycles,'with_openimagedenoise',False))
+        if scene.cycles.use_denoising:
+            scene.cycles.denoiser='OPENIMAGEDENOISE'
+        scene.cycles.adaptive_threshold=.012
+        scene.cycles.adaptive_min_samples=min(64,args.samples)
         scene.cycles.max_bounces=12
         scene.cycles.transmission_bounces=8
         scene.cycles.caustics_reflective=False
@@ -65,8 +70,8 @@ def main():
             target=Vector((.37,.16,1.24))
             camera.data.lens=20
             for name,location,energy,size in (
-                ('Cockpit fill',(-.05,-.34,1.88),8,.55),
-                ('Footwell fill',(.14,-.10,1.12),1.5,.22),
+                ('Cockpit fill',(-.05,-.34,1.88),12,.75),
+                ('Footwell fill',(.14,-.10,1.12),2.5,.32),
             ):
                 data=bpy.data.lights.new(name,'AREA')
                 data.energy, data.size=energy,size
@@ -97,6 +102,7 @@ def main():
             'script':'tools/render_offroader_details.py','script_sha256':SCRIPT_SHA256,
             'source_sha256':saved['sha256'],'samples':args.samples,'resolution':args.resolution,
             'view':view,'cutaway':view=='interior',
+            'denoising':scene.cycles.use_denoising,
         }
     names={item['path'] for item in previews}
     manifest['files']=[item for item in manifest['files'] if item['path'] not in names]+previews
