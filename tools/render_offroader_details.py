@@ -27,8 +27,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--asset-dir', type=Path, required=True)
     parser.add_argument('--resolution', type=int, default=1400)
-    parser.add_argument('--samples', type=int, default=384)
-    parser.add_argument('--views', nargs='+', choices=('engine','cockpit','interior'), default=['engine','cockpit','interior'])
+    parser.add_argument('--samples', type=int, default=256)
+    parser.add_argument('--views', nargs='+', choices=('engine','cockpit','interior','access'), default=['engine','cockpit','interior','access'])
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:])
     directory = args.asset_dir.resolve()
     manifest_path = directory/'manifest.json'
@@ -49,8 +49,8 @@ def main():
         scene.cycles.use_denoising=bool(getattr(_cycles,'with_openimagedenoise',False))
         if scene.cycles.use_denoising:
             scene.cycles.denoiser='OPENIMAGEDENOISE'
-        scene.cycles.adaptive_threshold=.012
-        scene.cycles.adaptive_min_samples=min(64,args.samples)
+        scene.cycles.adaptive_threshold=.02
+        scene.cycles.adaptive_min_samples=min(32,args.samples)
         scene.cycles.max_bounces=12
         scene.cycles.transmission_bounces=8
         scene.cycles.caustics_reflective=False
@@ -59,13 +59,24 @@ def main():
         camera.data.type='PERSP'
         camera.data.clip_start=.01
         studio=bpy.data.collections['STUDIO_RENDER_ONLY']
+        poses={}
+        def pose(role,angle):
+            matches=[obj for obj in scene.objects if obj.get('part_role')==role and '_LOD' not in obj.name]
+            if len(matches)!=1:
+                raise RuntimeError('Expected one source articulation: '+role)
+            pivot=matches[0]
+            axis=pivot.get('rotation_axis','Y')
+            pivot.rotation_euler['XYZ'.index(axis)]=math.radians(angle)
+            poses[role]=angle
         if view=='engine':
-            hinge=next(obj for obj in scene.objects if obj.get('part_role')=='hood_hinge_pivot' and '_LOD' not in obj.name)
-            hinge.rotation_euler.y=math.radians(-65)
+            pose('hood_hinge_pivot',-65)
             camera.location=(3.5,-2.50,3.05)
             target=Vector((1.22,0,1.12))
             camera.data.lens=52
         elif view=='cockpit':
+            # The real passenger door opens to give this inspection view
+            # daylight from the studio; no cabin geometry is removed.
+            pose('front_right_door_hinge_pivot',60)
             camera.location=(-.20,-.35,1.76)
             target=Vector((.37,.16,1.24))
             camera.data.lens=20
@@ -79,7 +90,7 @@ def main():
                 studio.objects.link(lamp)
                 lamp.location=location
                 lamp.rotation_euler=(Vector((.38,.23,1.18))-lamp.location).to_track_quat('-Z','Y').to_euler()
-        else:
+        elif view=='interior':
             # An explicitly labeled cutaway: remove upper exterior shell only
             # for this inspection render. The source and exported GLBs stay intact.
             for obj in bpy.data.collections['offroader_SOURCE'].objects:
@@ -91,7 +102,34 @@ def main():
             camera.location=(1.15,-2.20,4.25)
             target=Vector((-.67,.02,1.20))
             camera.data.lens=48
+        else:
+            for role,angle in (('front_left_door_hinge_pivot',-55),
+                               ('rear_left_door_hinge_pivot',-55),
+                               ('front_right_door_hinge_pivot',55),
+                               ('rear_right_door_hinge_pivot',55),
+                               ('tailgate_hinge_pivot',95)):
+                pose(role,angle)
+            camera.location=(-4.6,4.8,3.4)
+            target=Vector((-.5,0,1.05))
+            camera.data.lens=42
         camera.rotation_euler=(target-camera.location).to_track_quat('-Z','Y').to_euler()
+        if view=='access':
+            # Frame the actual open leaves and spare, not only the closed body.
+            camera.data.sensor_fit='HORIZONTAL'
+            bpy.context.view_layer.update()
+            inverse=camera.matrix_world.inverted()
+            aspect=scene.render.resolution_x/scene.render.resolution_y
+            half_width=camera.data.sensor_width*.5
+            candidates=[camera.data.lens]
+            for obj in bpy.data.collections['offroader_SOURCE'].objects:
+                if obj.type!='MESH' or obj.hide_render:
+                    continue
+                for corner in obj.bound_box:
+                    p=inverse@(obj.matrix_world@Vector(corner))
+                    if p.z<-.01:
+                        candidates.extend((.90*half_width*(-p.z)/max(abs(p.x),1.e-6),
+                                           .90*half_width/aspect*(-p.z)/max(abs(p.y),1.e-6)))
+            camera.data.lens=min(candidates)
         filename='offroader_'+view+'.png'
         scene.render.filepath=str(directory/filename)
         print('DETAIL_VIEW', view, flush=True)
@@ -103,6 +141,7 @@ def main():
             'source_sha256':saved['sha256'],'samples':args.samples,'resolution':args.resolution,
             'view':view,'cutaway':view=='interior',
             'denoising':scene.cycles.use_denoising,
+            'articulation_degrees':poses,
         }
     names={item['path'] for item in previews}
     manifest['files']=[item for item in manifest['files'] if item['path'] not in names]+previews

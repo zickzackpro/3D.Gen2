@@ -18,6 +18,7 @@ from pathlib import Path
 import sys
 
 import bpy
+import bmesh
 from mathutils import Matrix, Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -39,6 +40,9 @@ EXPECTED_ROLES = {
         "hood_hinge_pivot", "cabin_steering_pivot", "gear_lever_pivot",
         "transfer_lever_pivot", "handbrake_pivot", "accelerator_pivot",
         "brake_pivot", "clutch_pivot",
+        "front_left_door_hinge_pivot", "rear_left_door_hinge_pivot",
+        "front_right_door_hinge_pivot", "rear_right_door_hinge_pivot",
+        "tailgate_hinge_pivot",
     },
     "motorboat": {
         "outboard_trim_pivot", "outboard_steering_pivot",
@@ -59,6 +63,9 @@ PIVOT_AXES = {
     "hood_hinge_pivot": "Y", "cabin_steering_pivot": "X", "gear_lever_pivot": "Y",
     "transfer_lever_pivot": "Y", "handbrake_pivot": "Y", "accelerator_pivot": "Y",
     "brake_pivot": "Y", "clutch_pivot": "Y",
+    "front_left_door_hinge_pivot": "Z", "rear_left_door_hinge_pivot": "Z",
+    "front_right_door_hinge_pivot": "Z", "rear_right_door_hinge_pivot": "Z",
+    "tailgate_hinge_pivot": "Z",
     "outboard_trim_pivot": "Y", "outboard_steering_pivot": "Z",
     "boat_propeller_pivot": "X", "boat_steering_wheel_pivot": "X",
 }
@@ -279,8 +286,57 @@ def check_offroader_source():
         coords=[tuple(uv.uv) for uv in obj.data.uv_layers.active.data]
         check(min(c[0] for c in coords)<.001 and max(c[0] for c in coords)>.999,
               'Sidewall circumference UV was repacked instead of preserved')
+    roles={obj.get('part_role'):obj for obj in objects if obj.get('part_role')}
+    access={role:obj for role,obj in roles.items() if role and ('door_hinge_pivot' in role or role=='tailgate_hinge_pivot')}
+    check(len(access)==5,'Expected four opening doors and one tailgate')
+    access_counts={}
+    for role,pivot in access.items():
+        tagged=[obj for obj in meshes if obj.get('access_role')==role]
+        descendants=descendant_meshes(pivot)
+        check(tagged and all(obj in descendants for obj in tagged),f'{role} lost part of its moving leaf')
+        access_counts[role]=len(tagged)
+        if role!='tailgate_hinge_pivot':
+            check(any('inner_door_card' in obj.name for obj in descendants),f'{role} left its interior trim behind')
+            skins=[obj for obj in tagged if 'door_skin' in obj.name]
+            check(len(skins)==1,f'{role} has no unique outer door skin')
+            skin=skins[0]
+            centre=sum((Vector(c) for c in skin.bound_box),Vector())/8
+            closed=skin.matrix_world@centre
+            original=pivot.matrix_basis.copy()
+            angle=-55 if 'left' in role else 55
+            try:
+                pivot.matrix_basis=original@Matrix.Rotation(math.radians(angle),4,'Z')
+                bpy.context.view_layer.update()
+                opened=skin.matrix_world@centre
+                check(abs(opened.y)>abs(closed.y)+.20,f'{role} does not open outward')
+            finally:
+                pivot.matrix_basis=original
+                bpy.context.view_layer.update()
+    tailgate=descendant_meshes(access['tailgate_hinge_pivot'])
+    spare=[obj for obj in meshes if 'rear_spare_' in obj.name or 'spare_carrier_' in obj.name]
+    check(spare and all(obj in tailgate for obj in spare),'Tailgate left part of its spare/carrier behind')
+    defroster=[obj for obj in meshes if 'rear_glass_defroster_' in obj.name]
+    check(len(defroster)>=12 and all(obj in tailgate for obj in defroster),'Rear heater lines do not follow the tailgate')
+    check(all(not obj.get('access_role') for obj in meshes if 'belt_anchor' in obj.name or 'belt_retractor' in obj.name),
+          'Seat-belt anchors must remain attached to the body')
+    seats=[obj for obj in meshes if obj.get('seat_surface_uv')]
+    check(len(seats)==6,'Expected six continuous upholstered seat shells')
+    for obj in seats:
+        bm=bmesh.new(); bm.from_mesh(obj.data)
+        try:
+            check(all(edge.is_manifold for edge in bm.edges),f'{obj.name} has an open upholstery shell')
+            check(bm.calc_volume(signed=True)>0,f'{obj.name} has inverted upholstery volume')
+        finally:
+            bm.free()
+        check(len({p.material_index for p in obj.data.polygons})==2,f'{obj.name} lost cloth/leather regions')
+        check(obj.data.uv_layers.get('UVMap') is not None,f'{obj.name} lost its authored seam UV')
+    glazing=[obj for obj in meshes if obj.get('glazing_thickness_m')]
+    check(len(glazing)>=8 and all(.005<=obj['glazing_thickness_m']<=.009 for obj in glazing),
+          'Physical cabin glazing thickness is missing or outside its design range')
     return {'door_gap_recess_m':recesses,'headlamp_cover_projection_m':round(max(lens)-max(panel),5),
-            'sidewall_atlases':len(lettering)}
+            'sidewall_atlases':len(lettering),'access_leaf_components':access_counts,
+            'tailgate_spare_components':len(spare),'rear_heater_components':len(defroster),
+            'continuous_seat_shells':len(seats),'physical_glazing_panes':len(glazing)}
 
 
 def check_offroader_components(objects, path):
@@ -447,7 +503,7 @@ def main():
             errors.append({"manifest": str(path), "error": str(error)})
     result = {"ok": not errors, "blender_version": bpy.app.version_string,
               "assets": reports, "errors": errors,
-              "scope": "Blender GLB import, transforms, pivot rotation/isolation, steering/glazing, offroader construction/relief maps, boat waterline and embedded textures; no rendering or engine acceptance."}
+              "scope": "Blender GLB import, transforms, pivot rotation/isolation, steering/glazing, offroader construction/relief maps, access-panel parenting, continuous seats and glass thickness, boat waterline and embedded textures; no rendering or engine acceptance."}
     print("BLENDER_ROUNDTRIP_RESULT " + json.dumps(result, indent=2), flush=True)
     check(not errors, "Blender GLB round-trip validation failed; see JSON report")
 
