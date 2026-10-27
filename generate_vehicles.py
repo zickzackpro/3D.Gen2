@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Original procedural enduro, helicopter, airplane and 4x4 for Blender 4.3+.
+"""Original procedural vehicles and motorboat for Blender 4.3+.
 
 Run with Python (launches Blender), or:
 blender --background --factory-startup --python generate_vehicles.py -- --asset all --render
@@ -399,10 +399,12 @@ def add_studio(builder, resolution, samples):
     camera_data = bpy.data.cameras.new("Studio camera")
     camera = bpy.data.objects.new("Studio camera", camera_data)
     studio.objects.link(camera)
-    camera.location = center + Vector((span*1.02, -span*1.4, span*.64))
+    elevation = .85 if builder.name == "motorboat" else .64
+    camera.location = center + Vector((span*1.02, -span*1.4, span*elevation))
     camera.rotation_euler = (center-camera.location).to_track_quat("-Z", "Y").to_euler()
     camera_data.type = "ORTHO"
-    camera_data.ortho_scale = span*(1.05 if builder.name == "airplane" else 1.32)
+    frame_scale = {"airplane": 1.05, "motorboat": 1.22}.get(builder.name, 1.32)
+    camera_data.ortho_scale = span*frame_scale
     camera_data.lens = 50
     scene.camera = camera
     for name, offset, energy, color, size in [
@@ -419,7 +421,30 @@ def add_studio(builder, resolution, samples):
         light.rotation_euler = (center-light.location).to_track_quat("-Z", "Y").to_euler()
     floor_mat = bpy.data.materials.new("Studio floor")
     floor_mat.diffuse_color = (.055,.066,.084,1)
-    floor = builder.box("studio_floor", (0,0,bounds["min"][2]-.026), (span*200,span*200,.05), floor_mat)
+    floor_surface = bounds["min"][2]-.001
+    if builder.name == "motorboat":
+        # Preview-only water at the nominal design waterline, excluded from GLB.
+        floor_surface = 0.
+        floor_mat.name = "Studio water (render only)"
+        floor_mat.use_nodes = True
+        nodes, links = floor_mat.node_tree.nodes, floor_mat.node_tree.links
+        shader = nodes.get("Principled BSDF")
+        shader.inputs["Base Color"].default_value = (.018,.060,.080,1)
+        shader.inputs["Roughness"].default_value = .22
+        shader.inputs["Metallic"].default_value = .22
+        shader.inputs["IOR"].default_value = 1.333
+        coordinates = nodes.new("ShaderNodeTexCoord")
+        noise = nodes.new("ShaderNodeTexNoise")
+        noise.inputs["Scale"].default_value = 5.
+        noise.inputs["Detail"].default_value = 2.
+        bump = nodes.new("ShaderNodeBump")
+        bump.inputs["Strength"].default_value = .24
+        bump.inputs["Distance"].default_value = .075
+        links.new(coordinates.outputs["Object"], noise.inputs["Vector"])
+        links.new(noise.outputs["Fac"], bump.inputs["Height"])
+        links.new(bump.outputs["Normal"], shader.inputs["Normal"])
+    floor = builder.box("studio_water" if builder.name == "motorboat" else "studio_floor",
+                        (0,0,floor_surface-.025), (span*200,span*200,.05), floor_mat)
     builder.collection.objects.unlink(floor)
     studio.objects.link(floor)
     floor.parent = None
@@ -450,7 +475,8 @@ def sha256(path):
 
 def asset_builders():
     return {"enduro": build_enduro, "helicopter": build_helicopter,
-            "airplane": build_airplane, "offroader": build_offroader}
+            "airplane": build_airplane, "offroader": build_offroader,
+            "motorboat": build_motorboat}
 
 
 def generate_asset(name, options):
@@ -506,7 +532,7 @@ def generate_asset(name, options):
         "generator_sha256": GENERATOR_SHA256,
         "blender_version": bpy.app.version_string, "seed": options.seed,
         "license": "MIT", "provenance": "Original procedural geometry and generated micro-surface textures; no external model or image sources.",
-        "request": "Enduro-Motorrad, Helikopter, Flugzeug und 4x4-Gelaendewagen als detaillierte Python-generierte Grundlage fuer spaetere AAA-Spiele.",
+        "request": "Enduro, Helikopter, Flugzeug, 4x4-Gelaendewagen und Motorboot als detaillierte Python-generierte Grundlage fuer spaetere AAA-Spiele.",
         "design_exclusions": "No logos, third-party meshes, paid generation or claim of engine certification.",
         "units": "metres", "source_axes": {"forward":"+X","left":"+Y","up":"+Z"},
         "glb_axes": {"forward":"+X","left":"-Z","up":"+Y"},
@@ -528,7 +554,7 @@ def generate_asset(name, options):
 
 def main():
     builders = asset_builders()
-    parser = argparse.ArgumentParser(prog="generate_vehicles.py", description="Blender: Enduro, Helikopter, Flugzeug und 4x4 in Metern generieren, mit PBR, UVs und LODs.")
+    parser = argparse.ArgumentParser(prog="generate_vehicles.py", description="Blender: Enduro, Helikopter, Flugzeug, 4x4 und Motorboot mit PBR, UVs und LODs generieren.")
     parser.add_argument("--asset", choices=("all", "both", *builders), default="all",
                         help="all: alle Modelle (Standard); both: Enduro und Helikopter wie bisher")
     parser.add_argument("--output", type=Path, default=Path("generated"))
@@ -2223,6 +2249,481 @@ def build_offroader_interior(b, m):
         'seating': 'Two front seats and three-place rear bench with headrests and retracted belts.',
         'controls': 'Static steering wheel, geometric gauges, generic screen, gear/transfer selectors and pedals.',
         'limitations': 'Basic modeled cabin, no occupants, functioning instruments, animations or first-person interior certification.'
+    }
+
+
+def build_motorboat(b):
+    """Original open sportboat; nominal waterline Z=0, bow along +X."""
+    b.root['source_waterline_z_m'] = 0.
+    b.root['waterline_reference'] = 'Nominal design reference, not a computed loaded waterline'
+    m = {
+        'hull': b.mat('boat_navy_gelcoat', (.022,.055,.092), metallic=.10, roughness=.24),
+        'deck': b.mat('boat_ivory_gelcoat', (.80,.83,.80), metallic=.07, roughness=.29),
+        'accent': b.mat('boat_orange_belt', (.92,.155,.020), metallic=.12, roughness=.30),
+        'trim': b.mat('boat_graphite_trim', (.017,.024,.028), roughness=.44),
+        'rubber': b.mat('boat_rubber', (.012,.018,.021), roughness=.77),
+        'alloy': b.mat('boat_satin_alloy', (.46,.52,.55), metallic=.91, roughness=.28),
+        'steel': b.mat('boat_dark_steel', (.065,.085,.10), metallic=.86, roughness=.32),
+        'chrome': b.mat('boat_polished_fittings', (.68,.74,.78), metallic=1., roughness=.16),
+        'glass': b.mat('boat_clear_windscreen', (.84,.94,.97), roughness=.030, transmission=1.),
+        'upholstery': b.mat('boat_marine_vinyl', (.73,.76,.72), roughness=.56),
+        'piping': b.mat('boat_seat_piping', (.11,.17,.19), roughness=.58),
+        'teak': b.mat('boat_deck_planks', (.26,.135,.060), roughness=.61),
+        'display': b.mat('boat_helm_display', (.008,.028,.043), roughness=.23),
+        'red': b.mat('boat_port_light', (.65,.010,.006), roughness=.2, emission=(.8,.008,.004)),
+        'green': b.mat('boat_starboard_light', (.008,.42,.12), roughness=.2, emission=(.008,.7,.12)),
+        'lamp': b.mat('boat_navigation_white', (.75,.84,.9), roughness=.17, emission=(.60,.72,.85)),
+    }
+    hull = build_motorboat_hull(b, m)
+    equipment = build_motorboat_equipment(b, m)
+    # Broad hull sections approximate the taper. They are not a buoyancy volume.
+    b.collision_box('aft_hull', (-1.75,0,.23), (1.95,2.08,1.0))
+    b.collision_box('mid_hull', (-.10,0,.22), (1.35,2.10,1.04))
+    b.collision_box('forward_hull', (1.13,0,.30), (1.12,1.70,.96))
+    b.collision_box('bow', (2.17,0,.43), (1.0,.97,.85))
+    b.collision_box('bow_tip', (2.87,0,.65), (.54,.34,.57))
+    b.collision_box('outboard_cowling', (-3.04,0,.70), (.62,.62,.95))
+    b.collision_box('outboard_leg', (-3.08,0,-.20), (.32,.20,1.12))
+    b.collision_box('propeller_envelope', (-3.25,0,-.44), (.24,.45,.45))
+    return {
+        'description': 'Original open sport motorboat with a deep-V hull, cockpit, bow seating, transmitting windscreen and articulated outboard.',
+        'dimensions_design_m': {'hull_length': 5.95, 'hull_beam': 2.30, 'nominal_source_waterline_z': 0.},
+        'moving_parts': ['outboard_trim_pivot','outboard_steering_pivot','boat_propeller_pivot','boat_steering_wheel_pivot'],
+        'pivot_notes': 'Outboard trim: local Y. Steering: local Z, child of trim. Propeller: local X, child of outboard steering. Helm wheel: its aligned local X, independent of the engine.',
+        'hull': hull, 'equipment': equipment,
+        'notes': ['Z=0 is the nominal Blender waterline; below-water geometry is included in exports. It becomes glTF Y=0 after axis conversion.',
+                  'The rendered water surface belongs only to the studio collection and is excluded from GLB exports.',
+                  'No buoyancy, hydrodynamics, powered propulsion, steering coupling or animated cables are implemented.',
+                  'Eight static collision boxes need engine assignment and do not follow outboard motion.',
+                  'Transparent windscreen requires KHR_materials_transmission support in the target importer.'],
+    }
+
+def build_motorboat_hull(b, m):
+    """Closed deep-V hull shell around an open cockpit; waterline is Z=0."""
+    # x, beam/2, sheer, keel and nominal interior floor height.
+    stations = [
+        (-2.80,1.00,.850,-.380,.20), (-2.50,1.08,.860,-.420,.20),
+        (-2.00,1.135,.875,-.430,.20),(-1.50,1.15,.890,-.430,.20),
+        (-1.00,1.15,.900,-.430,.20),(-.50,1.14,.910,-.420,.20),
+        (0.,1.12,.920,-.390,.20),(.50,1.08,.930,-.340,.20),
+        (.55,1.075,.933,-.333,.20),(.70,1.055,.939,-.307,.43),
+        (1.00,1.00,.950,-.260,.43),(1.50,.86,.970,-.170,.43),
+        (2.00,.66,.990,-.040,.43),(2.35,.46,1.010,.100,.43),
+        (2.65,.28,1.020,.350,.43),(2.90,.13,1.025,.680,.43),
+        (3.08,.045,1.030,.910,.43),(3.15,.008,1.035,1.005,.43),
+    ]
+
+    # Monotone Hermite interpolation preserves the station dimensions while
+    # removing visible longitudinal facets from the bow and sheer silhouette.
+    derivatives=[]
+    for column in range(1,5):
+        h=[stations[i+1][0]-stations[i][0] for i in range(len(stations)-1)]
+        slopes=[(stations[i+1][column]-stations[i][column])/h[i] for i in range(len(h))]
+        tangent=[slopes[0]]
+        for i in range(1,len(stations)-1):
+            if slopes[i-1]*slopes[i] <= 0:
+                tangent.append(0.)
+            else:
+                w1,w2=2*h[i]+h[i-1],h[i]+2*h[i-1]
+                tangent.append((w1+w2)/(w1/slopes[i-1]+w2/slopes[i]))
+        tangent.append(slopes[-1])
+        derivatives.append(tangent)
+
+    def section(x):
+        i=next((j for j in range(len(stations)-1) if x <= stations[j+1][0]),len(stations)-2)
+        left,right=stations[i],stations[i+1]
+        h=right[0]-left[0]
+        t=max(0.,min(1.,(x-left[0])/h))
+        result=[x]
+        for column in range(1,5):
+            result.append((2*t**3-3*t*t+1)*left[column]+(t**3-2*t*t+t)*h*derivatives[column-1][i]
+                          +(-2*t**3+3*t*t)*right[column]+(t**3-t*t)*h*derivatives[column-1][i+1])
+        return result
+
+    # The outside starts at port gunwale, runs down the V and up starboard.
+    # The return path is the inner liner and sole, joined along both top rims.
+    half=[(1.,1.),(.998,.965),(.995,.910),(.991,.875),(.986,.845),
+          (.975,.740),(.960,.570),(.920,.360),(.860,.230),(.680,.150),
+          (.400,.075),(.130,.015),(0.,0.)]
+    outer=[(-r,t) for r,t in half]+[(r,t) for r,t in reversed(half[:-1])]
+
+    def ring(data):
+        x,width,sheer,keel,base_floor=data
+        height=sheer-keel
+        floor=min(max(base_floor,keel+min(.06,height*.35)),sheer-min(.12,height*.55))
+        inner=width-min(.08,width*.10)
+        floor_y=min(.91,width*.78)
+        top=sheer-min(.03,height*.10)
+        shoulder=sheer-min(.12,height*.20)
+        lower=floor+min(.10,(shoulder-floor)*.25)
+        offset=min(.06,width*.05)
+        vertices=[(x,width*r,keel+height*t) for r,t in outer]
+        vertices += [(x,inner,top),(x,inner*.98,shoulder),(x,floor_y+offset,lower),
+                     (x,floor_y,floor),(x,-floor_y,floor),(x,-floor_y-offset,lower),
+                     (x,-inner*.98,shoulder),(x,-inner,top)]
+        return vertices
+
+    xs=[]
+    for left,right in zip(stations,stations[1:]):
+        xs.extend(left[0]+(right[0]-left[0])*i/4 for i in range(4))
+    xs.append(stations[-1][0])
+    rings=[ring(section(x)) for x in xs]
+    count=len(rings[0])
+    vertices=[v for cross in rings for v in cross]
+    faces=[(i*count+j,i*count+(j+1)%count,(i+1)*count+(j+1)%count,(i+1)*count+j)
+           for i in range(len(rings)-1) for j in range(count)]
+    faces += [tuple(reversed(range(count))),tuple((len(rings)-1)*count+j for j in range(count))]
+    shell=b.mesh('deep_v_hull_shell',vertices,faces,m['hull'],smooth=True)
+    shell.data.materials.append(m['deck'])
+    shell.data.materials.append(m['accent'])
+    for i in range(len(rings)-1):
+        for j in range(count):
+            polygon=shell.data.polygons[i*count+j]
+            if j >= len(outer)-1:
+                polygon.material_index=1
+            else:
+                middle=(outer[j][1]+outer[j+1][1])*.5
+                polygon.material_index=1 if middle>=.875 else 2 if middle>=.845 else 0
+    for polygon in shell.data.polygons[-2:]:
+        polygon.use_smooth=False
+    shell['construction']='Closed outer skin, inner liner and cockpit sole joined at gunwales; no cap across cockpit opening.'
+    shell['waterline_z']=0.
+
+    def slab(name, outline, offset, material, bevel=0):
+        n=len(outline); delta=Vector(offset)*.5
+        vv=[tuple(Vector(v)-delta) for v in outline]+[tuple(Vector(v)+delta) for v in outline]
+        ff=[tuple(reversed(range(n))),tuple(range(n,2*n))]
+        ff += [(j,(j+1)%n,(j+1)%n+n,j+n) for j in range(n)]
+        return b.mesh(name,vv,ff,material,bevel=bevel)
+
+    def straight_trim(name, points, radius, material):
+        obj=b.tube(name,points,radius,material,resolution=1)
+        for spline in obj.data.splines:
+            for point in spline.bezier_points:
+                point.handle_left_type=point.handle_right_type='VECTOR'
+        return obj
+
+    # Narrow external rub rails follow the actual loft, including the rising bow.
+    for side,label in ((1,'port'),(-1,'starboard')):
+        rail=[]; metal=[]
+        for x in xs:
+            _,width,sheer,keel,_=section(x)
+            rail.append((x,side*(width+.005),sheer-.012))
+            metal.append((x,side*(width+.012),sheer-.033))
+        b.tube(label+'_rub_rail',rail,.016,m['rubber'],resolution=2)
+        b.tube(label+'_rub_rail_insert',metal,.005,m['alloy'],resolution=1)
+        # Long triangular spray strakes stand just proud of the V bottom.
+        for row,(fraction,vertical) in enumerate(((.52,.107),(.79,.199))):
+            vv=[]
+            samples=[-2.68+4.90*j/30 for j in range(31)]
+            for x in samples:
+                _,width,sheer,keel,_=section(x)
+                y=side*fraction*width; z=keel+(sheer-keel)*vertical
+                vv.extend([(x,y-side*.012,z-.003),(x,y+side*.012,z+.005),(x,y,z-.022)])
+            ff=[(i*3+j,i*3+(j+1)%3,(i+1)*3+(j+1)%3,(i+1)*3+j)
+                for i in range(len(samples)-1) for j in range(3)]
+            ff += [(2,1,0),tuple((len(samples)-1)*3+j for j in range(3))]
+            b.mesh(label+'_spray_strake_'+str(row),vv,ff,m['hull'],smooth=True)
+
+    # The aft bulkhead closes the otherwise open liner, with a central motor
+    # notch above waterline and a shallow self-draining splashwell inside.
+    transom=[(-2.765,y,z) for y,z in [(-.98,.20),(.98,.20),(.98,.83),(.44,.83),
+                                     (.44,.56),(-.44,.56),(-.44,.83),(-.98,.83)]]
+    slab('transom_bulkhead',transom,(.055,0,0),m['deck'],bevel=.008)
+    b.box('splashwell_floor',(-2.55,0,.39),(.44,.90,.025),m['deck'],bevel=.015)
+    b.box('splashwell_front_wall',(-2.32,0,.52),(.05,.95,.27),m['deck'],bevel=.015)
+    for side in (-1,1):
+        b.box('splashwell_side',(-2.55,side*.46,.49),(.44,.025,.18),m['deck'],bevel=.010)
+        b.cylinder('splashwell_drain',(-2.57,side*.24,.405),(-2.57,side*.24,.413),.024,m['steel'],vertices=24)
+        for i in range(3):
+            y=side*.24+(i-1)*.011
+            b.box('drain_slot',(-2.57,y,.418),(.025,.004,.003),m['trim'],bevel=.001)
+
+    # A practical non-slip deck; the floor under the seats remains truly open.
+    b.box('cockpit_teak_inlay',(-.99,0,.210),(2.78,1.54,.018),m['teak'],bevel=.025)
+    for j in range(-7,8):
+        b.box('cockpit_deck_caulk',(-.99,j*.102,.221),(2.71,.004,.003),m['trim'],bevel=.001)
+    for x,label in ((-.68,'service'),(-1.73,'storage')):
+        b.box(label+'_floor_hatch_seal',(x,0,.228),(.63,.48,.012),m['trim'],bevel=.027)
+        b.box(label+'_floor_hatch',(x,0,.237),(.60,.45,.011),m['teak'],bevel=.022)
+        b.cylinder(label+'_hatch_pull',(x-.20,0,.244),(x-.20,0,.251),.034,m['alloy'],vertices=28)
+        b.box(label+'_hatch_pull_slot',(x-.20,0,.254),(.040,.007,.003),m['trim'],bevel=.002)
+    # Forward deck inset narrows with the bow rather than using a rectangular box.
+    bow_outline=[(.75,-.76,.439),(.75,.76,.439),(1.32,.66,.439),(1.90,.43,.439),
+                 (2.34,.21,.439),(2.42,0,.439),(2.34,-.21,.439),(1.90,-.43,.439),(1.32,-.66,.439)]
+    slab('bow_deck_inlay',bow_outline,(0,0,.014),m['teak'],bevel=.010)
+    for side in (-1,1):
+        for offset in (.10,.20,.30):
+            straight_trim('bow_deck_caulk',[(.79,side*offset,.449),(1.45,side*offset,.449),
+                                           (2.20-offset*.9,side*offset,.449)],.002,m['trim'])
+
+    # A closed forepeak cap provides storage and an anchoring surface ahead of
+    # the bow seating; the cockpit and forward seating bay stay uncovered.
+    cap_x=[2.40,2.55,2.70,2.85,3.00,3.10,3.15]
+    vv=[]
+    for x in cap_x:
+        _,width,sheer,_,_=section(x)
+        z=sheer-.018
+        vv.extend([(x,-width*.92,z),(x,width*.92,z),(x,width*.92,z-.035),(x,-width*.92,z-.035)])
+    ff=[(i*4+j,i*4+(j+1)%4,(i+1)*4+(j+1)%4,(i+1)*4+j)
+        for i in range(len(cap_x)-1) for j in range(4)]
+    ff += [(3,2,1,0),tuple((len(cap_x)-1)*4+j for j in range(4))]
+    b.mesh('forepeak_deck',vv,ff,m['deck'],smooth=True)
+    cap_height=section(2.54)[2]-.018
+    b.box('anchor_locker_seal',(2.54,0,cap_height+.004),(.25,.28,.008),m['trim'],bevel=.026)
+    b.box('anchor_locker_hatch',(2.54,0,cap_height+.010),(.23,.26,.008),m['deck'],bevel=.022)
+    b.cylinder('anchor_locker_latch',(2.47,0,cap_height+.014),(2.47,0,cap_height+.022),.021,m['alloy'],vertices=24)
+
+    # Two independent swim platforms flank the outboard mounting gap.
+    for side,label in ((1,'port'),(-1,'starboard')):
+        outline=[(-3.13,side*.50,.385),(-3.13,side*1.04,.385),(-2.78,side*1.07,.385),
+                 (-2.70,side*.79,.385),(-2.80,side*.50,.385)]
+        slab(label+'_swim_platform',outline,(0,0,.055),m['deck'],bevel=.020)
+        b.box(label+'_platform_teak',(-2.94,side*.79,.418),(.27,.40,.010),m['teak'],bevel=.021)
+        for j in (-1,0,1):
+            b.box(label+'_platform_caulk',(-2.94,side*.79+j*.10,.425),(.23,.004,.003),m['trim'],bevel=.001)
+        b.cylinder(label+'_platform_support',(-2.82,side*.79,.22),(-3.04,side*.79,.35),.023,m['alloy'],vertices=16)
+
+    return {'hull':'Closed outer skin, inner liner and sole around open cockpit; deep-V keel, chines and spray strakes.',
+            'waterline_z':0.,'nominal_dimensions_m':{'hull_length':5.95,'beam':2.30},
+            'notes':['Sealed modular meshes are intended for visual use, not a hydrostatic solver.',
+                     'Keel is below Z=0; preserve this waterline convention when importing.',
+                     'Swim platforms leave the central outboard gap open.']}
+
+
+def build_motorboat_equipment(b, m):
+    """Cockpit furniture, glazing and an independently trimmed/steered outboard."""
+
+    def straight_trim(name, points, radius, material):
+        obj = b.tube(name, points, radius, material)
+        for spline in obj.data.splines:
+            for point in spline.bezier_points:
+                point.handle_left_type = point.handle_right_type = 'VECTOR'
+        return obj
+
+    def panel(name, outline, offset, material, bevel=0):
+        delta = Vector(offset)*.5
+        n = len(outline)
+        vertices = [tuple(Vector(p)-delta) for p in outline]
+        vertices += [tuple(Vector(p)+delta) for p in outline]
+        faces = [tuple(reversed(range(n))), tuple(range(n,2*n))]
+        faces += [(i,(i+1)%n,(i+1)%n+n,i+n) for i in range(n)]
+        return b.mesh(name, vertices, faces, material, bevel=bevel)
+
+    # Two bolster seats leave a usable centre walkway to the open bow.
+    for side, label in ((1,'port'),(-1,'helm')):
+        y=side*.52
+        b.cylinder(label+'_seat_pedestal',(-.35,y,.21),(-.35,y,.47),.055,m['alloy'],vertices=24)
+        b.cylinder(label+'_pedestal_foot',(-.35,y,.205),(-.35,y,.225),.11,m['alloy'],vertices=32)
+        b.box(label+'_seat_shell',(-.37,y,.52),(.56,.55,.11),m['deck'],bevel=.05)
+        b.box(label+'_seat_cushion',(-.32,y,.58),(.51,.49,.13),m['upholstery'],bevel=.045)
+        b.box(label+'_seat_insert',(-.30,y,.651),(.37,.32,.015),m['upholstery'],bevel=.015)
+        b.box(label+'_seat_back_shell',(-.64,y,.79),(.15,.55,.44),m['deck'],bevel=.055,rotation=(0,-.12,0))
+        b.box(label+'_seat_back_pad',(-.552,y,.79),(.055,.47,.36),m['upholstery'],bevel=.025,rotation=(0,-.12,0))
+        for dy in (-.225,.225):
+            b.box(label+'_side_bolster',(-.33,y+dy,.665),(.43,.066,.12),m['upholstery'],bevel=.028)
+            b.tube(label+'_cushion_piping',[(-.50,y+dy,.674),(-.30,y+dy,.68),(-.10,y+dy,.674)],.003,m['piping'],resolution=1)
+        for dy in (-.14,.14):
+            b.tube(label+'_back_stitch',[(-.505,y+dy,.68),(-.519,y+dy,.80),(-.534,y+dy,.93)],.002,m['piping'],resolution=1)
+        b.box(label+'_seat_adjuster',(-.18,y-side*.28,.49),(.12,.028,.032),m['trim'],bevel=.008)
+
+    # Rear lounge is segmented into three cushions, above enclosed stowage.
+    b.box('aft_bench_base',(-1.93,0,.39),(.58,1.67,.36),m['deck'],bevel=.04)
+    for index,y in enumerate((-.56,0,.56)):
+        name='aft_lounge_'+str(index)
+        b.box(name+'_cushion',(-1.91,y,.60),(.55,.54,.13),m['upholstery'],bevel=.042)
+        b.box(name+'_back_shell',(-2.22,y,.78),(.16,.56,.38),m['deck'],bevel=.035)
+        b.box(name+'_back_cushion',(-2.125,y,.78),(.06,.51,.31),m['upholstery'],bevel=.025)
+        straight_trim(name+'_cushion_piping',[(-2.14,y-.21,.672),(-1.69,y-.21,.672),
+                       (-1.69,y+.21,.672),(-2.14,y+.21,.672)],.0025,m['piping'])
+        b.box(name+'_storage_door',(-1.627,y,.40),(.018,.48,.23),m['deck'],bevel=.015)
+        b.box(name+'_storage_latch',(-1.612,y,.43),(.015,.075,.025),m['alloy'],bevel=.008)
+
+    # Tapered bow pads follow the hull's narrowing inner footprint.
+    for side,label in ((1,'port'),(-1,'starboard')):
+        shape=[(.90,side*.34),(1.30,side*.31),(1.70,side*.25),(1.94,side*.22),
+               (1.94,side*.46),(1.70,side*.57),(1.30,side*.72),(.90,side*.81)]
+        panel(label+'_bow_lounge',[(x,y,.59) for x,y in shape],(0,0,.12),m['upholstery'],bevel=.025)
+        straight_trim(label+'_bow_pad_piping',[(x,y,.655) for x,y in shape+[shape[0]]],.0025,m['piping'])
+        # Back bolsters sit just inboard of the hull liner.
+        b.tube(label+'_bow_back_bolster',[(.95,side*.82,.73),(1.30,side*.73,.74),
+               (1.65,side*.60,.77),(1.95,side*.46,.80)],.057,m['upholstery'],resolution=3)
+    fore_pad=[(1.96,-.43),(2.15,-.33),(2.30,-.20),(2.32,0),(2.30,.20),(2.15,.33),(1.96,.43)]
+    panel('bow_forward_cushion',[(x,y,.59) for x,y in fore_pad],(0,0,.12),m['upholstery'],bevel=.024)
+
+    # Dual consoles leave an open centre passage. Helm is on starboard.
+    for side,label in ((1,'passenger'),(-1,'helm')):
+        b.box(label+'_console_base',(.57,side*.57,.56),(.30,.66,.60),m['deck'],bevel=.045)
+        b.box(label+'_console_top',(.56,side*.57,.885),(.32,.70,.10),m['trim'],bevel=.035)
+        b.box(label+'_console_face',(.389,side*.57,.79),(.027,.62,.23),m['trim'],bevel=.02)
+    b.box('passenger_glovebox',(.366,.55,.79),(.016,.45,.17),m['deck'],bevel=.02)
+    b.box('glovebox_latch',(.352,.55,.83),(.015,.075,.026),m['alloy'],bevel=.007)
+    b.tube('passenger_grab_handle',[(.32,.31,.86),(.265,.31,.86),(.265,.70,.86),(.32,.70,.86)],.013,m['alloy'])
+    for y in (-.72,-.47):
+        b.cylinder('helm_gauge_face',(.368,y,.865),(.377,y,.865),.058,m['display'],vertices=32)
+        b.torus('helm_gauge_bezel',(.362,y,.865),.058,.004,m['chrome'],axis='X',major_segments=32,minor_segments=8)
+        for i in range(9):
+            a=math.radians(-135+i*33.75)
+            p=(.354,y+.044*math.sin(a),.865+.044*math.cos(a))
+            b.sphere('gauge_tick',p,(.0018,.003,.003),m['piping'],segments=6,rings=4)
+        b.cylinder('gauge_needle',(.351,y,.865),(.351,y+.025,.887),.002,m['accent'],vertices=6)
+    b.box('navigation_screen_frame',(.366,-.87,.79),(.023,.11,.14),m['alloy'],bevel=.009)
+    b.box('navigation_screen',(.351,-.87,.79),(.009,.085,.115),m['display'],bevel=.006)
+    for y in (-.71,-.61,-.51,-.41):
+        b.box('helm_toggle_switch',(.357,y,.704),(.023,.024,.037),m['rubber'],bevel=.006)
+        b.sphere('switch_indicator',(.343,y,.724),(.004,.005,.005),m['lamp'],segments=8,rings=4)
+
+    # Wheel's local X follows the inclined column, while it remains independent
+    # of the outboard steering pivot (no simulation or automatic linkage).
+    wheel_center=Vector((.27,-.53,.86))
+    column_base=Vector((.51,-.53,.79))
+    wheel_axis=(wheel_center-column_base).normalized()
+    wheel_pivot=b.empty('boat_steering_wheel_pivot',tuple(wheel_center))
+    wheel_pivot.rotation_mode='QUATERNION'
+    wheel_pivot.rotation_quaternion=Vector((1,0,0)).rotation_difference(wheel_axis)
+    b.cylinder('helm_steering_column',tuple(column_base),tuple(wheel_center),.025,m['steel'],vertices=24)
+    wheel=b.torus('helm_wheel_rim',tuple(wheel_center),.165,.012,m['rubber'],axis='X',major_segments=64,minor_segments=12)
+    wheel.rotation_quaternion=Vector((0,0,1)).rotation_difference(wheel_axis)
+    b.parent(wheel,wheel_pivot)
+    b.parent(b.cylinder('helm_wheel_hub',tuple(wheel_center-wheel_axis*.025),tuple(wheel_center+wheel_axis*.025),.038,m['alloy'],vertices=24),wheel_pivot)
+    u=Vector((0,1,0)); v=wheel_axis.cross(u).normalized()
+    for i in range(3):
+        a=math.tau*i/3+.35
+        end=wheel_center+.151*(math.cos(a)*u+math.sin(a)*v)
+        b.parent(b.cylinder('helm_wheel_spoke',tuple(wheel_center),tuple(end),.008,m['chrome'],vertices=12),wheel_pivot)
+    b.box('throttle_quadrant',(-.03,-.864,.70),(.18,.065,.24),m['trim'],bevel=.026)
+    b.cylinder('throttle_pivot',(-.03,-.88,.74),(-.03,-.81,.74),.024,m['alloy'],vertices=20)
+    b.cylinder('throttle_lever',(-.03,-.804,.74),(.03,-.804,.91),.012,m['chrome'],vertices=16)
+    b.sphere('throttle_grip',(.03,-.804,.91),(.035,.025,.032),m['rubber'],segments=20,rings=10)
+    b.tube('engine_stop_lanyard',[(.28,-.79,.70),(.15,-.78,.61),(.01,-.76,.67)],.003,m['red'],resolution=1)
+
+    # Split closed glazing panes retain the open central walkthrough.
+    for side,label in ((1,'port'),(-1,'starboard')):
+        front=[(.65,side*.16,.78),(.65,side*.98,.78),(.35,side*.90,1.40),(.35,side*.16,1.40)]
+        wing=[(.65,side*.98,.78),(-.45,side*1.00,.80),(-.35,side*.96,1.02),(.35,side*.90,1.40)]
+        for kind,outline,offset in (('front',front,(.006,0,0)),('wing',wing,(0,.006,0))):
+            panel(label+'_'+kind+'_windscreen',outline,offset,m['glass'])
+            straight_trim(label+'_'+kind+'_window_frame',outline+[outline[0]],.013,m['alloy'])
+        for x,y,z in ((.65,side*.96,.78),(-.44,side*.99,.80)):
+            b.box(label+'_windscreen_mount',(x,y,z-.022),(.08,.052,.04),m['alloy'],bevel=.01)
+        b.cylinder(label+'_screen_support',(.15,side*.92,.77),(-.26,side*.94,1.01),.010,m['chrome'],vertices=12)
+
+    # Low rails stay inside the known bow taper; fittings are unbranded.
+    for side,label in ((1,'port'),(-1,'starboard')):
+        rail=[(1.03,side*.92,1.05),(1.45,side*.79,1.10),(1.85,side*.63,1.14),(2.20,side*.46,1.15)]
+        b.tube(label+'_bow_handrail',rail,.015,m['chrome'])
+        for x,y,z in (rail[0],rail[-1]):
+            b.cylinder(label+'_rail_stanchion',(x,y,z-.16),(x,y,z),.012,m['chrome'],vertices=12)
+            b.box(label+'_rail_base',(x,y,z-.16),(.075,.05,.013),m['alloy'],bevel=.007)
+        b.tube(label+'_cockpit_grabrail',[(-1.40,side*.99,.87),(-1.40,side*.99,1.01),(-.83,side*.99,1.01),(-.83,side*.99,.87)],.014,m['chrome'])
+        for x in (-1.45,-.91):
+            b.cylinder(label+'_cupholder_well',(x,side*.925,.76),(x,side*.925,.80),.043,m['trim'],vertices=24)
+            b.torus(label+'_cupholder_rim',(x,side*.925,.802),.043,.004,m['alloy'],axis='Z',major_segments=32,minor_segments=8)
+        for x,y,z in ((-2.13,side*1.02,.91),(1.04,side*.98,.99)):
+            b.box(label+'_cleat_base',(x,y,z),(.15,.06,.015),m['alloy'],bevel=.008)
+            for dx in (-.042,.042):
+                b.cylinder(label+'_cleat_post',(x+dx,y,z),(x+dx,y,z+.04),.010,m['chrome'],vertices=12)
+            b.cylinder(label+'_cleat_horn',(x-.12,y,z+.045),(x+.12,y,z+.045),.012,m['chrome'],vertices=16)
+        b.box(label+'_navigation_lamp_base',(1.07,side*1.01,.99),(.17,.065,.045),m['trim'],bevel=.016)
+        b.sphere(label+'_navigation_lamp',(1.07,side*1.045,1.00),(.062,.025,.021),m['red'] if side==1 else m['green'],segments=20,rings=10)
+    b.cylinder('all_round_light_pole',(-2.13,.84,.88),(-2.13,.84,1.70),.012,m['chrome'],vertices=16)
+    b.cylinder('all_round_light_base',(-2.13,.84,.865),(-2.13,.84,.89),.037,m['alloy'],vertices=20)
+    b.sphere('all_round_white_light',(-2.13,.84,1.735),(.035,.035,.050),m['lamp'],segments=20,rings=12)
+    b.torus('bow_towing_eye',(2.91,0,.705),.035,.009,m['alloy'],axis='Y',major_segments=24,minor_segments=8)
+    for y in (-.97,-.65):
+        b.tube('stowed_swim_ladder_rail',[(-2.46,y,.51),(-2.76,y,.51),(-2.94,y,.45)],.014,m['chrome'])
+    for x in (-2.51,-2.65,-2.79):
+        b.cylinder('stowed_swim_ladder_rung',(x,-.97,.51),(x,-.65,.51),.016,m['alloy'],vertices=16)
+        b.box('ladder_non_slip_pad',(x,-.81,.527),(.05,.25,.012),m['rubber'],bevel=.005)
+
+    # The mounting bracket remains fixed to the hull. Tilt, steering and prop
+    # spin form a strict hierarchy so engines can drive them independently.
+    trim_pivot=b.empty('outboard_trim_pivot',(-2.90,0,.58))
+    steer_pivot=b.empty('outboard_steering_pivot',(-3.04,0,.60),parent=trim_pivot)
+    prop_pivot=b.empty('boat_propeller_pivot',(-3.25,0,-.44),parent=steer_pivot)
+
+    def motor(obj):
+        b.parent(obj,steer_pivot)
+        return obj
+
+    for side in (-1,1):
+        b.box('transom_mount_plate',(-2.825,side*.17,.47),(.055,.13,.30),m['steel'],bevel=.015)
+        b.box('outboard_clamp',(-2.86,side*.17,.59),(.17,.09,.07),m['alloy'],bevel=.015)
+        b.cylinder('transom_clamp_screw',(-2.77,side*.17,.53),(-2.91,side*.17,.53),.012,m['chrome'],vertices=12)
+        b.cylinder('trim_hinge_pin',(-2.90,side*.13,.58),(-2.90,side*.26,.58),.031,m['chrome'],vertices=20)
+        bracket=panel('tilting_motor_bracket',[(-2.90,side*.16,.61),(-3.10,side*.16,.59),
+                          (-3.13,side*.16,.22),(-2.97,side*.16,.20)],(0,.035,0),m['steel'],bevel=.013)
+        b.parent(bracket,trim_pivot)
+        b.parent(b.cylinder('trim_hydraulic_ram',(-2.89,side*.17,.26),(-3.04,side*.17,.48),.018,m['chrome'],vertices=16),trim_pivot)
+    b.parent(b.cylinder('outboard_swivel_shaft',(-3.04,0,.22),(-3.04,0,.71),.045,m['steel'],vertices=24),trim_pivot)
+
+    # Sculpted closed powerhead cowling, with shoulders rather than a simple box.
+    sections=[(.34,-3.055,.20,.22),(.45,-3.10,.27,.27),(.66,-3.12,.30,.29),
+              (.94,-3.11,.29,.285),(1.075,-3.105,.25,.25),(1.13,-3.095,.18,.20)]
+    vertices=[]; ring=48
+    for z,x,hx,hy in sections:
+        for j in range(ring):
+            a=math.tau*j/ring
+            # Rounded superellipse shoulders retain a manufactured appearance.
+            xx=math.copysign(abs(math.cos(a))**.72,math.cos(a))
+            yy=math.copysign(abs(math.sin(a))**.72,math.sin(a))
+            vertices.append((x+hx*xx,hy*yy,z))
+    faces=[]
+    for i in range(len(sections)-1):
+        faces.extend((i*ring+j,i*ring+(j+1)%ring,(i+1)*ring+(j+1)%ring,(i+1)*ring+j) for j in range(ring))
+    faces += [tuple(reversed(range(ring))),tuple((len(sections)-1)*ring+j for j in range(ring))]
+    cowl=motor(b.mesh('outboard_powerhead_cowling',vertices,faces,m['hull'],smooth=True))
+    cowl.data.materials.append(m['accent'])
+    for i in range(ring): cowl.data.polygons[ring+i].material_index=1
+    for side in (-1,1):
+        motor(b.box('cowling_air_intake',(-3.16,side*.286,.96),(.29,.015,.08),m['trim'],bevel=.014))
+        for x in (-3.26,-3.20,-3.14,-3.08):
+            motor(b.box('cowling_vent_louvre',(x,side*.298,.96),(.019,.016,.064),m['steel'],bevel=.005,rotation=(0,.20,0)))
+        motor(b.box('cowling_latch',(-3.07,side*.258,.44),(.06,.026,.07),m['alloy'],bevel=.010))
+    motor(b.tube('outboard_rear_lift_handle',[(-3.38,-.12,.99),(-3.44,-.12,1.03),(-3.44,.12,1.03),(-3.38,.12,.99)],.014,m['rubber']))
+    motor(panel('outboard_drive_leg',[(-2.96,0,.36),(-3.15,0,.34),(-3.18,0,-.26),
+                    (-3.29,0,-.40),(-3.28,0,-.51),(-3.04,0,-.51),(-2.96,0,-.29)],(0,.105,0),m['hull'],bevel=.018))
+    motor(b.sphere('outboard_gearcase',(-3.12,0,-.44),(.235,.085,.085),m['hull'],segments=32,rings=16))
+    motor(panel('outboard_skeg',[(-3.02,0,-.48),(-3.29,0,-.50),(-3.31,0,-.80),(-3.20,0,-.80)],(0,.028,0),m['hull'],bevel=.008))
+    motor(panel('anti_ventilation_plate',[(-2.91,-.13,-.27),(-3.31,-.17,-.27),(-3.42,-.10,-.27),
+                    (-3.42,.10,-.27),(-3.31,.17,-.27),(-2.91,.13,-.27)],(0,0,.018),m['hull'],bevel=.009))
+    for side in (-1,1):
+        for z in (-.31,-.35,-.39):
+            motor(b.box('gearcase_water_inlet',(-2.985,side*.056,z),(.044,.008,.012),m['trim'],bevel=.003))
+    # Flexible controls are deliberately static at the neutral rig position.
+    b.tube('outboard_rigging_boot',[(-2.65,.29,.47),(-2.86,.35,.61),(-3.04,.27,.54)],.033,m['rubber'])
+
+    # Three closed, swept, twisted marine propeller blades rotate about local X.
+    b.parent(b.cylinder('marine_propeller_hub',(-3.235,0,-.44),(-3.405,0,-.44),.047,m['alloy'],vertices=32),prop_pivot)
+    b.parent(b.cylinder('propeller_retaining_nut',(-3.405,0,-.44),(-3.422,0,-.44),.019,m['chrome'],vertices=6),prop_pivot)
+    radii=[.045,.075,.115,.155,.185,.201]
+    chords=[.042,.071,.087,.083,.061,.026]
+    samples=[.5-.5*math.cos(math.pi*i/16) for i in range(17)]
+    profile=[(u,1) for u in samples]+[(u,-1) for u in reversed(samples[1:-1])]
+    for blade in range(3):
+        a=math.radians(20+blade*120)
+        vv=[]
+        for radius,chord in zip(radii,chords):
+            fraction=(radius-radii[0])/(radii[-1]-radii[0])
+            pitch=math.radians(43-25*fraction)
+            sweep=.025*fraction*fraction
+            for u,sign in profile:
+                thickness=5*.10*chord*(.2969*math.sqrt(u)-.126*u-.3516*u*u+.2843*u**3-.1036*u**4)
+                chordwise=(u-.30)*chord+sweep
+                tangent=chordwise*math.cos(pitch)-sign*thickness*math.sin(pitch)
+                x=-3.32+chordwise*math.sin(pitch)+sign*thickness*math.cos(pitch)
+                vv.append((x,radius*math.sin(a)+tangent*math.cos(a),-.44+radius*math.cos(a)-tangent*math.sin(a)))
+        n=len(profile); ff=[]
+        for i in range(len(radii)-1):
+            ff.extend((i*n+j,i*n+(j+1)%n,(i+1)*n+(j+1)%n,(i+1)*n+j) for j in range(n))
+        ff += [tuple(reversed(range(n))),tuple((len(radii)-1)*n+j for j in range(n))]
+        b.parent(b.mesh('marine_propeller_blade',vv,ff,m['alloy'],smooth=True),prop_pivot)
+
+    return {
+        'equipment': 'Open five-seat cockpit plus tapered bow lounge, split windscreen, starboard helm, rails and a single sculpted outboard.',
+        'moving_parts': ['outboard_trim_pivot','outboard_steering_pivot','boat_propeller_pivot','boat_steering_wheel_pivot'],
+        'pivot_notes': 'Outboard trim local Y, steering local Z below trim, propeller local X below steering; helm wheel local X along inclined column.',
+        'limitations': 'No steering linkage solver, fluid simulation, working instruments or deforming rigging hoses. Waterline is Z=0; lower unit intentionally extends to Z=-0.80.'
     }
 
 if __name__ == "__main__":

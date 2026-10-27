@@ -37,6 +37,10 @@ EXPECTED_ROLES = {
         "front_left_wheel_pivot", "front_right_wheel_pivot",
         "rear_left_wheel_pivot", "rear_right_wheel_pivot",
     },
+    "motorboat": {
+        "outboard_trim_pivot", "outboard_steering_pivot",
+        "boat_propeller_pivot", "boat_steering_wheel_pivot",
+    },
 }
 
 PIVOT_AXES = {
@@ -49,6 +53,8 @@ PIVOT_AXES = {
     "front_left_steering_pivot": "Z", "front_right_steering_pivot": "Z",
     "front_left_wheel_pivot": "Y", "front_right_wheel_pivot": "Y",
     "rear_left_wheel_pivot": "Y", "rear_right_wheel_pivot": "Y",
+    "outboard_trim_pivot": "Y", "outboard_steering_pivot": "Z",
+    "boat_propeller_pivot": "X", "boat_steering_wheel_pivot": "X",
 }
 
 
@@ -179,17 +185,8 @@ def check_images(path):
     return len(referenced)
 
 
-def check_offroader_components(objects, path):
-    """Verify nested steering and the actual exported/imported glazing material."""
-    by_role = {obj.get("part_role"): obj for obj in objects if obj.get("part_role")}
-    parents = {}
-    for side in ("left", "right"):
-        wheel_role = f"front_{side}_wheel_pivot"
-        steering_role = f"front_{side}_steering_pivot"
-        check(by_role[wheel_role].parent == by_role[steering_role],
-              f"{wheel_role} is not directly parented to {steering_role}")
-        parents[wheel_role] = steering_role
-
+def check_glazing_transmission(objects, path, label, expected_factor=None):
+    """Check transmission on materials actually assigned to exported meshes."""
     document = GLB(path).doc
     materials = document.get("materials", [])
     used_indices = {
@@ -203,11 +200,14 @@ def check_offroader_components(objects, path):
         factor = extension.get("transmissionFactor", 0)
         if isinstance(factor, (int, float)) and factor > 0:
             check(math.isfinite(factor) and factor <= 1,
-                  "Invalid exported offroader glazing transmission")
+                  f"Invalid exported {label} glazing transmission")
+            if expected_factor is not None:
+                check(math.isclose(factor, expected_factor, rel_tol=1e-5, abs_tol=1e-6),
+                      f"{label} glazing transmission changed: expected {expected_factor}, found {factor}")
             transmitted.append((material.get("name"), factor))
-    check(transmitted, "Offroader GLB lost its nonzero KHR_materials_transmission glazing")
+    check(transmitted, f"{label} GLB lost its nonzero KHR_materials_transmission glazing")
     check("KHR_materials_transmission" in document.get("extensionsUsed", []),
-          "Offroader GLB does not declare its transmission extension")
+          f"{label} GLB does not declare its transmission extension")
 
     imported_materials = {
         material for obj in objects if obj.type == "MESH"
@@ -227,7 +227,44 @@ def check_offroader_components(objects, path):
                   for weight in weights),
               f"Imported glazing {name!r} lost its Principled transmission value {factor}")
         glazing.append({"material": name, "transmission_factor": factor})
+    return glazing
+
+
+def check_offroader_components(objects, path):
+    """Verify nested steering and the actual exported/imported glazing material."""
+    by_role = {obj.get("part_role"): obj for obj in objects if obj.get("part_role")}
+    parents = {}
+    for side in ("left", "right"):
+        wheel_role = f"front_{side}_wheel_pivot"
+        steering_role = f"front_{side}_steering_pivot"
+        check(by_role[wheel_role].parent == by_role[steering_role],
+              f"{wheel_role} is not directly parented to {steering_role}")
+        parents[wheel_role] = steering_role
+    glazing = check_glazing_transmission(objects, path, "Offroader")
     return {"front_wheel_parents": parents, "glazing_transmission": glazing}
+
+
+def check_motorboat_components(objects, path, bounds, source_bounds):
+    """Preserve nested motor articulation and the source Z=0 waterline."""
+    by_role = {obj.get("part_role"): obj for obj in objects if obj.get("part_role")}
+    parents = {"outboard_steering_pivot": "outboard_trim_pivot",
+               "boat_propeller_pivot": "outboard_steering_pivot"}
+    for child, parent in parents.items():
+        check(by_role[child].parent == by_role[parent],
+              f"{child} is not directly parented to {parent}")
+    root = by_role["outboard_trim_pivot"].parent
+    check(root is not None and root.get("asset") == "motorboat",
+          "Outboard trim pivot lost its motorboat asset root")
+    check(by_role["boat_steering_wheel_pivot"].parent == root,
+          "Helm wheel must stay under the asset root, outside the moving outboard")
+    for label, box in (("saved source", source_bounds), ("imported LOD0", bounds)):
+        check(box["min"][2] < -.2 and box["max"][2] > .5,
+              f"Motorboat {label} no longer straddles the Z=0 waterline")
+    glazing = check_glazing_transmission(objects, path, "Motorboat", expected_factor=1.0)
+    return {"outboard_parents": parents, "waterline_z_m": 0,
+            "source_z_extent_m": [source_bounds["min"][2], source_bounds["max"][2]],
+            "imported_z_extent_m": [bounds["min"][2], bounds["max"][2]],
+            "glazing_transmission": glazing}
 
 
 def check_asset(manifest_path):
@@ -252,6 +289,11 @@ def check_asset(manifest_path):
     check(len(source_collision) == manifest["collision_proxies"],
           "Source collision proxy count differs from manifest")
     reference_collision = mesh_statistics(source_collision)
+    boat_source_bounds = None
+    if name == "motorboat":
+        source = bpy.data.collections.get("motorboat_SOURCE")
+        check(source is not None, "Saved boat scene has no editable source collection")
+        boat_source_bounds = mesh_statistics(list(source.all_objects))["bounds"]
 
     objects = reset_and_import(lod_path)
     actual = mesh_statistics(objects)
@@ -276,6 +318,7 @@ def check_asset(manifest_path):
         if obj.type == "MESH":
             check(bool(obj.data.uv_layers), f"Mesh {obj.name} has no UV layer after import")
     offroader = check_offroader_components(objects, lod_path) if name == "offroader" else None
+    motorboat = check_motorboat_components(objects, lod_path, actual["bounds"], boat_source_bounds) if name == "motorboat" else None
 
     collision_objects = reset_and_import(collision_path)
     collision = mesh_statistics(collision_objects)
@@ -292,6 +335,8 @@ def check_asset(manifest_path):
               "collision": collision}
     if offroader is not None:
         result["offroader_components"] = offroader
+    if motorboat is not None:
+        result["motorboat_components"] = motorboat
     return result
 
 
@@ -311,7 +356,7 @@ def main():
             errors.append({"manifest": str(path), "error": str(error)})
     result = {"ok": not errors, "blender_version": bpy.app.version_string,
               "assets": reports, "errors": errors,
-              "scope": "Blender GLB import, transforms, pivot rotation/isolation, offroader steering/glazing and embedded textures; no rendering or engine acceptance."}
+              "scope": "Blender GLB import, transforms, pivot rotation/isolation, steering/glazing, boat waterline and embedded textures; no rendering or engine acceptance."}
     print("BLENDER_ROUNDTRIP_RESULT " + json.dumps(result, indent=2), flush=True)
     check(not errors, "Blender GLB round-trip validation failed; see JSON report")
 
