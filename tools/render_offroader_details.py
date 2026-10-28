@@ -28,7 +28,7 @@ def main():
     parser.add_argument('--asset-dir', type=Path, required=True)
     parser.add_argument('--resolution', type=int, default=1400)
     parser.add_argument('--samples', type=int, default=256)
-    parser.add_argument('--views', nargs='+', choices=('engine','cockpit','interior','access'), default=['engine','cockpit','interior','access'])
+    parser.add_argument('--views', nargs='+', choices=('engine','cockpit','interior','access','bodywork','lighting'), default=['engine','cockpit','interior','access','bodywork','lighting'])
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:])
     directory = args.asset_dir.resolve()
     manifest_path = directory/'manifest.json'
@@ -74,6 +74,14 @@ def main():
             camera.location=(3.5,-2.50,3.05)
             target=Vector((1.22,0,1.12))
             camera.data.lens=52
+        elif view=='bodywork':
+            camera.location=(3.65,-2.65,3.10)
+            target=Vector((1.28,-.05,1.28))
+            camera.data.lens=63
+        elif view=='lighting':
+            camera.location=(3.40,-1.45,1.62)
+            target=Vector((2.07,-.55,1.15))
+            camera.data.lens=75
         elif view=='cockpit':
             # The real passenger door opens to give this inspection view
             # daylight from the studio; no cabin geometry is removed.

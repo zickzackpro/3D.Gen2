@@ -64,7 +64,7 @@ hood_targets=[o for o in meshes if any(t in o.name for t in (
 report['hood_targets']=[o.name for o in hood_targets]
 report['hood']=sweep('hood_hinge_pivot',(0,-5,-15,-35,-65,-72),hood_targets)
 hood_shell=next(o for o in meshes if o.name.endswith('formed_hood_shell'))
-nose=next(o for o in meshes if o.name.endswith('front_panel_crossrail'))
+nose=next(o for o in meshes if o.get('component')=='continuous_front_and_side_body')
 report['hood_nose_shut_line_m']=[]
 for y in (-.60,-.30,0.,.30,.60):
     underside=fixed[hood_shell.name][0].ray_cast(Vector((2.044,y,1.30)),Vector((0,0,1)))[0]
